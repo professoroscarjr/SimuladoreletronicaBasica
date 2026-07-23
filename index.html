@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Circuitos - Tinkercad Clone</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; overflow: hidden; }
+        
+        .canvas-bg {
+            background-color: #f8fafc;
+            background-image: radial-gradient(#cbd5e1 1.5px, transparent 1.5px);
+            background-size: 24px 24px;
+        }
+        
+        .comp-card { transition: box-shadow 0.2s, transform 0.1s; }
+        .comp-card:hover { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .comp-icon { font-size: 2rem; transition: color 0.3s ease; }
+        
+        .pin { transition: all 0.2s; z-index: 20; }
+        .pin:hover { transform: scale(1.5); background-color: #3b82f6; border-color: #bfdbfe; }
+        
+        .wire-line { stroke: #3b82f6; stroke-width: 4; stroke-linecap: round; cursor: pointer; transition: stroke 0.2s; pointer-events: auto; }
+        .wire-line:hover { stroke: #ef4444; stroke-width: 6; }
+        
+        .selected-comp { border-color: #3b82f6 !important; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.4) !important; }
+        .selected-wire { stroke: #eab308 !important; stroke-width: 6px !important; filter: drop-shadow(0 0 4px #eab308); }
+        
+        .glow-red { text-shadow: 0 0 15px #ef4444, 0 0 30px #ef4444; color: #ef4444 !important; }
+        .glow-green { text-shadow: 0 0 15px #22c55e, 0 0 30px #22c55e; color: #22c55e !important; }
+        .glow-blue { text-shadow: 0 0 15px #3b82f6, 0 0 30px #3b82f6; color: #3b82f6 !important; }
+        .glow-yellow { text-shadow: 0 0 15px #eab308, 0 0 30px #eab308; color: #eab308 !important; }
+        .glow-white { text-shadow: 0 0 15px #ffffff, 0 0 30px #ffffff; color: #ffffff !important; }
+        .glow-fire { filter: drop-shadow(0 0 8px #f97316); color: #f97316 !important; animation: flicker 0.5s infinite alternate; }
+        
+        @keyframes flicker {
+            0% { opacity: 0.8; transform: scale(0.95); }
+            100% { opacity: 1; transform: scale(1.05); }
+        }
+
+        @keyframes spinFast {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .motor-spinning {
+            animation: spinFast 0.2s linear infinite;
+        }
+        .motor-spinning-slow {
+            animation: spinFast 0.6s linear infinite;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-slate-100 h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="h-16 bg-slate-900 text-white flex items-center justify-between px-6 shadow-md z-30 relative">
+        <div class="flex items-center space-x-3">
+            <i class="fas fa-microchip text-blue-400 text-2xl"></i>
+            <h1 class="text-xl font-bold tracking-tight">Simulador de Eletrônica</h1>
+        </div>
+        <div class="flex items-center">
+            <button id="deleteBtn" onclick="deleteSelected()" class="hidden mr-3 px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-lg shadow-md font-semibold transition-all items-center">
+                <i class="fas fa-trash mr-2"></i>Remover
+            </button>
+            <button id="playBtn" onclick="toggleSimulation()" class="px-5 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg shadow-md font-semibold transition-all flex items-center">
+                <i class="fas fa-play mr-2"></i>Iniciar Simulação
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Layout -->
+    <div class="flex flex-1 relative overflow-hidden">
+        
+        <!-- Sidebar: Componentes -->
+        <aside class="w-72 bg-white border-r border-slate-200 flex flex-col shadow-lg z-20">
+            <div class="p-4 bg-slate-50 border-b border-slate-200">
+                <h2 class="font-semibold text-slate-700"><i class="fas fa-cubes mr-2"></i>Componentes Básicos</h2>
+                <p class="text-xs text-slate-500 mt-1">Arraste para a área de trabalho</p>
+            </div>
+            <div class="p-4 flex-1 overflow-y-auto space-y-3" id="library">
+                <!-- Injetado via JS -->
+            </div>
+        </aside>
+
+        <!-- Canvas Area -->
+        <main class="flex-1 relative canvas-bg" id="canvasContainer">
+            <svg class="absolute inset-0 pointer-events-none w-full h-full z-10" id="wiresSvg"></svg>
+            <div id="canvas" class="absolute inset-0 w-full h-full">
+                <!-- Componentes renderizados aqui -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Container para Notificações (Toasts) -->
+    <div id="toastContainer" class="fixed bottom-6 right-6 z-50 flex flex-col gap-3 pointer-events-none"></div>
+
+    <!-- Modal Configuração de Componentes -->
+    <div id="propModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-40 z-50 flex items-center justify-center backdrop-blur-sm transition-opacity">
+        <div class="bg-white p-6 rounded-2xl shadow-2xl w-80 transform transition-all scale-100">
+            <h3 class="text-xl font-bold text-slate-800 mb-4 flex items-center">
+                <i class="fas fa-cog mr-2 text-blue-500"></i> Configurar
+            </h3>
+            <label id="modalLabel" class="block text-sm font-medium text-slate-600 mb-2">Valor</label>
+            <input type="number" id="propValue" class="w-full border-2 border-slate-200 rounded-lg p-3 text-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all outline-none mb-6" min="0" step="0.1" placeholder="Ex: 5">
+            <select id="propSelect" class="hidden w-full border-2 border-slate-200 rounded-lg p-3 text-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all outline-none mb-6">
+                <option value="red">Vermelho</option>
+                <option value="green">Verde</option>
+                <option value="blue">Azul</option>
+                <option value="yellow">Amarelo</option>
+                <option value="white">Branco</option>
+            </select>
+            <input type="hidden" id="editCompId">
+            <div class="flex justify-end space-x-3">
+                <button onclick="closeModal()" class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition-colors">Cancelar</button>
+                <button onclick="saveProps()" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow-md shadow-blue-200 transition-colors">Aplicar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const state = {
+            components: [], // { id, type, x, y, props }
+            wires: [],      // { id, from: 'compId_pin1', to: 'compId_pin2' }
+            isPlaying: false,
+            wiringMode: null,
+            mousePos: { x: 0, y: 0 },
+            draggedComp: null,
+            dragOffset: { x: 0, y: 0 },
+            shortCircuitAlerted: false,
+            selectedItem: null,
+            selectedType: null
+        };
+
+        const componentDefs = {
+            battery: { name: 'Fonte de Bancada', icon: 'fa-plug', color: '#10b981', props: { voltage: 5 }, polarity: true },
+            resistor: { name: 'Resistor', icon: 'fa-wave-square', color: '#f59e0b', props: { resistance: 330 }, polarity: false },
+            potentiometer: { name: 'Potenciômetro', icon: 'fa-sliders-h', color: '#d97706', props: { maxResistance: 10000, sliderPos: 50 }, polarity: false },
+            capacitor: { name: 'Capacitor', icon: 'fa-battery-half', color: '#8b5cf6', props: { capacitance: 100 }, polarity: true },
+            led: { name: 'LED', icon: 'fa-lightbulb', color: '#7f1d1d', props: { burnt: false, ledColor: 'red' }, polarity: true },
+            motor: { name: 'Motor CC 5V', icon: 'fa-fan', color: '#0284c7', props: { ratedVoltage: 5, internalResistance: 20 }, polarity: true },
+            switch: { name: 'Interruptor', icon: 'fa-toggle-off', color: '#64748b', props: { closed: false }, polarity: false },
+            multimeter: { name: 'Multímetro', icon: 'fa-tachometer-alt', color: '#3b82f6', props: {}, polarity: true }
+        };
+
+        const ledColors = {
+            red: { unlit: '#7f1d1d', litClass: 'glow-red', hex: '#ef4444', name: 'Vermelho' },
+            green: { unlit: '#14532d', litClass: 'glow-green', hex: '#22c55e', name: 'Verde' },
+            blue: { unlit: '#1e3a8a', litClass: 'glow-blue', hex: '#3b82f6', name: 'Azul' },
+            yellow: { unlit: '#713f12', litClass: 'glow-yellow', hex: '#eab308', name: 'Amarelo' },
+            white: { unlit: '#94a3b8', litClass: 'glow-white', hex: '#ffffff', name: 'Branco' }
+        };
+
+        let audioCtx;
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playBurnSound() {
+            if (!audioCtx) return;
+            const osc1 = audioCtx.createOscillator();
+            const osc2 = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc1.type = 'sawtooth';
+            osc2.type = 'square';
+            
+            osc1.frequency.setValueAtTime(150, audioCtx.currentTime);
+            osc1.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 0.3);
+            
+            osc2.frequency.setValueAtTime(250, audioCtx.currentTime);
+            osc2.frequency.exponentialRampToValueAtTime(20, audioCtx.currentTime + 0.3);
+            
+            gain.gain.setValueAtTime(1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            
+            osc1.connect(gain);
+            osc2.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            osc1.start();
+            osc2.start();
+            osc1.stop(audioCtx.currentTime + 0.3);
+            osc2.stop(audioCtx.currentTime + 0.3);
+        }
+
+        function showToast(message, type = 'error') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            const bg = type === 'error' ? 'bg-red-600' : (type === 'warn' ? 'bg-yellow-500' : 'bg-green-500');
+            const icon = type === 'error' ? 'fa-bolt' : 'fa-info-circle';
+            
+            toast.className = `${bg} text-white px-5 py-3 rounded-lg shadow-xl font-medium transition-all duration-300 opacity-0 transform translate-y-4 flex items-center`;
+            toast.innerHTML = `<i class="fas ${icon} mr-3 text-lg"></i> <span>${message}</span>`;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.remove('opacity-0', 'translate-y-4');
+            }, 10);
+            
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-4');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        function initLibrary() {
+            const lib = document.getElementById('library');
+            Object.keys(componentDefs).forEach(type => {
+                const def = componentDefs[type];
+                const el = document.createElement('div');
+                el.className = 'flex items-center p-3 bg-white border border-slate-200 rounded-lg cursor-grab hover:bg-slate-50 hover:border-blue-300 transition-all shadow-sm';
+                el.draggable = true;
+                el.ondragstart = (e) => {
+                    e.dataTransfer.setData('type', type);
+                    e.dataTransfer.effectAllowed = 'copy';
+                };
+                el.innerHTML = `
+                    <div class="w-10 h-10 flex items-center justify-center rounded-md bg-slate-100 mr-3">
+                        <i class="fas ${def.icon} text-xl" style="color: ${def.color}"></i>
+                    </div>
+                    <div>
+                        <div class="font-medium text-slate-700 text-sm">${def.name}</div>
+                        ${type === 'resistor' ? `<div class="text-[10px] text-slate-400">Padrão: 330Ω</div>` : ''}
+                        ${type === 'potentiometer' ? `<div class="text-[10px] text-slate-400">Padrão: 10kΩ</div>` : ''}
+                        ${type === 'battery' ? `<div class="text-[10px] text-slate-400">Padrão: 5V</div>` : ''}
+                        ${type === 'motor' ? `<div class="text-[10px] text-slate-400">Padrão: 5V CC</div>` : ''}
+                    </div>
+                `;
+                lib.appendChild(el);
+            });
+        }
+
+        const canvasContainer = document.getElementById('canvasContainer');
+        const canvas = document.getElementById('canvas');
+
+        canvasContainer.ondragover = (e) => e.preventDefault();
+        canvasContainer.ondrop = (e) => {
+            e.preventDefault();
+            const type = e.dataTransfer.getData('type');
+            if (type && componentDefs[type]) {
+                const rect = canvasContainer.getBoundingClientRect();
+                const comp = {
+                    id: 'comp_' + Math.random().toString(36).substr(2, 9),
+                    type: type,
+                    x: e.clientX - rect.left - 45,
+                    y: e.clientY - rect.top - 45,
+                    props: JSON.parse(JSON.stringify(componentDefs[type].props))
+                };
+                state.components.push(comp);
+                renderCanvas();
+            }
+        };
+
+        function resetSimulationStates() {
+            state.shortCircuitAlerted = false;
+            state.components.forEach(c => {
+                if(c.props.burnt !== undefined) c.props.burnt = false;
+            });
+        }
+
+        function renderCanvas() {
+            canvas.innerHTML = '';
+            state.components.forEach(comp => {
+                const def = componentDefs[comp.type];
+                const el = document.createElement('div');
+                
+                let selectedClass = (state.selectedItem === comp.id) ? 'selected-comp' : '';
+                el.className = `absolute bg-white rounded-xl shadow-md border-2 border-slate-200 flex flex-col items-center justify-center group select-none comp-card z-10 ${selectedClass}`;
+                el.style.width = (comp.type === 'potentiometer' || comp.type === 'motor') ? '100px' : '90px';
+                el.style.height = '90px';
+                el.style.left = `${comp.x}px`;
+                el.style.top = `${comp.y}px`;
+                el.id = comp.id;
+
+                el.onmousedown = (e) => startComponentDrag(e, comp);
+
+                let innerHTML = '';
+
+                if(def.polarity) {
+                    innerHTML += `<div class="absolute -left-3 text-[12px] text-white font-bold bg-red-600 rounded-full w-6 h-6 flex items-center justify-center shadow-md z-20 border-2 border-white">+</div>`;
+                    innerHTML += `<div class="absolute -right-3 text-[16px] text-white font-bold bg-slate-800 rounded-full w-6 h-6 flex items-center justify-center shadow-md z-20 border-2 border-white pb-0.5">-</div>`;
+                }
+
+                if(comp.type === 'multimeter') {
+                    innerHTML += `<div class="text-[11px] bg-slate-900 text-green-400 font-mono px-2 py-0.5 rounded shadow-inner mb-1" id="disp_${comp.id}">0.00V</div>`;
+                }
+                
+                let iconClass = def.icon;
+                if(comp.type === 'switch' && comp.props.closed) iconClass = 'fa-toggle-on';
+                
+                let color = comp.props.burnt ? '#1f2937' : def.color;
+                if (comp.type === 'led') {
+                    const cInfo = ledColors[comp.props.ledColor || 'red'];
+                    color = comp.props.burnt ? '#1f2937' : cInfo.unlit;
+                }
+                
+                let extraIconAttr = (comp.type === 'motor') ? `id="icon_${comp.id}"` : `id="icon_${comp.id}"`;
+                innerHTML += `<i class="fas ${iconClass} comp-icon" style="color: ${color};" ${extraIconAttr}></i>`;
+                innerHTML += `<i class="fas fa-fire absolute -top-3 left-1/2 -translate-x-1/2 text-2xl ${comp.props.burnt ? 'glow-fire' : 'hidden'} z-30" id="fire_${comp.id}"></i>`;
+
+                const gearHTML = `
+                    <div onmousedown="event.stopPropagation();" onclick="openPropModal('${comp.id}')" 
+                         class="absolute -top-3 -right-3 bg-blue-600 hover:bg-blue-500 text-white rounded-full w-7 h-7 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer shadow-lg z-20 hover:scale-110">
+                        <i class="fas fa-cog text-sm pointer-events-none"></i>
+                    </div>`;
+
+                if (comp.type === 'resistor') {
+                    innerHTML += `<div class="text-[10px] mt-1 text-slate-600 font-bold bg-slate-100 px-1.5 rounded" id="lbl_${comp.id}">${comp.props.resistance}Ω</div>`;
+                    innerHTML += gearHTML;
+                } else if (comp.type === 'potentiometer') {
+                    let currentR = Math.round((comp.props.sliderPos / 100) * comp.props.maxResistance);
+                    let labelR = currentR >= 1000 ? (currentR/1000).toFixed(1) + 'kΩ' : currentR + 'Ω';
+                    innerHTML += `<div class="text-[9px] mt-0.5 text-slate-600 font-bold bg-slate-100 px-1 rounded" id="lbl_${comp.id}">${labelR}</div>`;
+                    innerHTML += `<input type="range" min="0" max="100" value="${comp.props.sliderPos}" oninput="updatePotSlider('${comp.id}', this.value)" onmousedown="event.stopPropagation();" class="w-16 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer mt-1">`;
+                    innerHTML += gearHTML;
+                } else if (comp.type === 'battery') {
+                    innerHTML += `<div class="text-[10px] mt-1 text-slate-600 font-bold bg-slate-100 px-1.5 rounded" id="lbl_${comp.id}">${comp.props.voltage}V</div>`;
+                    innerHTML += gearHTML;
+                } else if (comp.type === 'capacitor') {
+                    innerHTML += `<div class="text-[10px] mt-1 text-slate-600 font-bold bg-slate-100 px-1.5 rounded" id="lbl_${comp.id}">${comp.props.capacitance}µF</div>`;
+                    innerHTML += gearHTML;
+                } else if (comp.type === 'led') {
+                    const corNome = ledColors[comp.props.ledColor || 'red'].name;
+                    innerHTML += `<div class="text-[10px] mt-1 text-slate-500 font-semibold">LED ${corNome}</div>`;
+                    innerHTML += gearHTML;
+                } else if (comp.type === 'motor') {
+                    innerHTML += `<div class="text-[10px] mt-1 text-slate-600 font-bold bg-slate-100 px-1.5 rounded" id="lbl_${comp.id}">5V CC</div>`;
+                    innerHTML += gearHTML;
+                } else {
+                    innerHTML += `<div class="text-[10px] mt-1 text-slate-500 font-semibold">${def.name}</div>`;
+                }
+
+                if(comp.type === 'switch') {
+                    innerHTML += `<div class="absolute inset-0 cursor-pointer z-10 rounded-xl" onclick="toggleSwitch('${comp.id}')" onmousedown="event.stopPropagation();"></div>`;
+                }
+
+                innerHTML += `<div class="pin absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 bg-slate-400 rounded-full border-[3px] border-white shadow-md cursor-crosshair hover:bg-blue-500" id="${comp.id}_pin1" onclick="handlePinClick('${comp.id}_pin1', event)" onmousedown="event.stopPropagation();"></div>`;
+                innerHTML += `<div class="pin absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-4 h-4 bg-slate-400 rounded-full border-[3px] border-white shadow-md cursor-crosshair hover:bg-blue-500" id="${comp.id}_pin2" onclick="handlePinClick('${comp.id}_pin2', event)" onmousedown="event.stopPropagation();"></div>`;
+
+                el.innerHTML = innerHTML;
+                canvas.appendChild(el);
+            });
+            renderWires();
+        }
+
+        function updatePotSlider(id, val) {
+            const comp = state.components.find(c => c.id === id);
+            if (comp) {
+                comp.props.sliderPos = parseFloat(val);
+                let currentR = Math.round((comp.props.sliderPos / 100) * comp.props.maxResistance);
+                let labelR = currentR >= 1000 ? (currentR/1000).toFixed(1) + 'kΩ' : currentR + 'Ω';
+                const lbl = document.getElementById(`lbl_${id}`);
+                if (lbl) lbl.innerText = labelR;
+            }
+        }
+
+        function startComponentDrag(e, comp) {
+            if(e.button !== 0 || state.wiringMode) return;
+            selectItem(comp.id, 'component');
+            state.draggedComp = comp;
+            const el = document.getElementById(comp.id);
+            const rect = el.getBoundingClientRect();
+            state.dragOffset = {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+            el.style.zIndex = '50';
+        }
+
+        canvasContainer.onmousemove = (e) => {
+            const rect = canvasContainer.getBoundingClientRect();
+            state.mousePos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+
+            if (state.draggedComp) {
+                const newX = e.clientX - rect.left - state.dragOffset.x;
+                const newY = e.clientY - rect.top - state.dragOffset.y;
+                state.draggedComp.x = Math.max(0, Math.min(newX, rect.width - 90));
+                state.draggedComp.y = Math.max(0, Math.min(newY, rect.height - 90));
+                
+                const el = document.getElementById(state.draggedComp.id);
+                el.style.left = `${state.draggedComp.x}px`;
+                el.style.top = `${state.draggedComp.y}px`;
+                renderWires();
+            }
+            if (state.wiringMode) renderWires();
+        };
+
+        window.onmouseup = () => {
+            if (state.draggedComp) {
+                document.getElementById(state.draggedComp.id).style.zIndex = '10';
+                state.draggedComp = null;
+            }
+        };
+
+        function openPropModal(compId) {
+            const comp = state.components.find(c => c.id === compId);
+            if (!comp) return;
+            document.getElementById('editCompId').value = comp.id;
+            
+            const label = document.getElementById('modalLabel');
+            const input = document.getElementById('propValue');
+            const select = document.getElementById('propSelect');
+            
+            input.classList.remove('hidden');
+            select.classList.add('hidden');
+            
+            if (comp.type === 'resistor') {
+                label.innerText = 'Resistência (Ohms - Ω)';
+                input.value = comp.props.resistance;
+                input.step = "1";
+            } else if (comp.type === 'potentiometer') {
+                label.innerText = 'Resistência Máxima (Ohms - Ω)';
+                input.value = comp.props.maxResistance;
+                input.step = "100";
+            } else if (comp.type === 'battery') {
+                label.innerText = 'Tensão da Fonte (Volts - V)';
+                input.value = comp.props.voltage;
+                input.step = "0.1";
+            } else if (comp.type === 'capacitor') {
+                label.innerText = 'Capacitância (Microfarads - µF)';
+                input.value = comp.props.capacitance;
+                input.step = "1";
+            } else if (comp.type === 'motor') {
+                label.innerText = 'Resistência Interna (Ohms - Ω)';
+                input.value = comp.props.internalResistance;
+                input.step = "1";
+            } else if (comp.type === 'led') {
+                label.innerText = 'Cor do LED';
+                input.classList.add('hidden');
+                select.classList.remove('hidden');
+                select.value = comp.props.ledColor || 'red';
+            }
+            
+            document.getElementById('propModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('propModal').classList.add('hidden');
+        }
+
+        function saveProps() {
+            const id = document.getElementById('editCompId').value;
+            const comp = state.components.find(c => c.id === id);
+            
+            if (comp) {
+                if (comp.type === 'led') {
+                    const val = document.getElementById('propSelect').value;
+                    comp.props.ledColor = val;
+                    resetSimulationStates();
+                    renderCanvas();
+                    closeModal();
+                    return;
+                }
+
+                const val = parseFloat(document.getElementById('propValue').value);
+                if (val >= 0) {
+                    if (comp.type === 'resistor') {
+                        comp.props.resistance = val;
+                    } else if (comp.type === 'potentiometer') {
+                        comp.props.maxResistance = val;
+                    } else if (comp.type === 'battery') {
+                        comp.props.voltage = val;
+                    } else if (comp.type === 'capacitor') {
+                        comp.props.capacitance = val;
+                        if(comp.props.storedV > val) comp.props.storedV = 0;
+                    } else if (comp.type === 'motor') {
+                        comp.props.internalResistance = val;
+                    }
+                    resetSimulationStates();
+                    renderCanvas();
+                }
+            }
+            closeModal();
+        }
+
+        function toggleSwitch(compId) {
+            const comp = state.components.find(c => c.id === compId);
+            if(comp) {
+                comp.props.closed = !comp.props.closed;
+                resetSimulationStates();
+                renderCanvas();
+            }
+        }
+
+        function handlePinClick(pinId, event) {
+            event.stopPropagation();
+            if (!state.wiringMode) {
+                state.wiringMode = pinId;
+            } else {
+                if (state.wiringMode !== pinId) {
+                    const comp1 = state.wiringMode.substring(0, state.wiringMode.lastIndexOf('_'));
+                    const comp2 = pinId.substring(0, pinId.lastIndexOf('_'));
+                    
+                    if (comp1 !== comp2) {
+                        state.wires.push({ id: 'w_' + Date.now(), from: state.wiringMode, to: pinId });
+                        resetSimulationStates();
+                    }
+                }
+                state.wiringMode = null;
+                renderWires();
+            }
+        }
+
+        canvasContainer.onclick = (e) => {
+            if(state.wiringMode) {
+                state.wiringMode = null;
+                renderWires();
+            } else {
+                if (e.target.id === 'canvasContainer' || e.target.id === 'canvas' || e.target.id === 'wiresSvg') {
+                    clearSelection();
+                }
+            }
+        }
+
+        function getPinPos(pinId) {
+            const el = document.getElementById(pinId);
+            if(!el) return {x:0, y:0};
+            const rect = el.getBoundingClientRect();
+            const canvasRect = canvasContainer.getBoundingClientRect();
+            return {
+                x: rect.left - canvasRect.left + rect.width/2,
+                y: rect.top - canvasRect.top + rect.height/2
+            };
+        }
+
+        function renderWires() {
+            const svg = document.getElementById('wiresSvg');
+            svg.innerHTML = '';
+            
+            state.wires.forEach(w => {
+                const p1 = getPinPos(w.from);
+                const p2 = getPinPos(w.to);
+                drawBezier(svg, p1, p2, w.id);
+            });
+
+            if (state.wiringMode && state.mousePos) {
+                const p1 = getPinPos(state.wiringMode);
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                const d = `M ${p1.x} ${p1.y} C ${p1.x + (state.mousePos.x - p1.x)/2} ${p1.y}, ${p1.x + (state.mousePos.x - p1.x)/2} ${state.mousePos.y}, ${state.mousePos.x} ${state.mousePos.y}`;
+                path.setAttribute('d', d);
+                path.setAttribute('class', 'wire-line opacity-50');
+                path.setAttribute('fill', 'none');
+                svg.appendChild(path);
+            }
+        }
+
+        function drawBezier(svg, p1, p2, id) {
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            const d = `M ${p1.x} ${p1.y} C ${p1.x + (p2.x - p1.x)/2} ${p1.y}, ${p1.x + (p2.x - p1.x)/2} ${p2.y}, ${p2.x} ${p2.y}`;
+            path.setAttribute('d', d);
+            
+            let selectedClass = (state.selectedItem === id) ? 'selected-wire' : '';
+            path.setAttribute('class', `wire-line ${selectedClass}`);
+            path.setAttribute('fill', 'none');
+            
+            path.onclick = (e) => {
+                e.stopPropagation();
+                selectItem(id, 'wire');
+            };
+            svg.appendChild(path);
+        }
+
+        function toggleSimulation() {
+            initAudio();
+            state.isPlaying = !state.isPlaying;
+            const btn = document.getElementById('playBtn');
+            if (state.isPlaying) {
+                clearSelection();
+                btn.innerHTML = '<i class="fas fa-pause mr-2"></i>Pausar Simulação';
+                btn.className = 'px-5 py-2.5 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg shadow-md font-semibold transition-all flex items-center';
+            } else {
+                btn.innerHTML = '<i class="fas fa-play mr-2"></i>Iniciar Simulação';
+                btn.className = 'px-5 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg shadow-md font-semibold transition-all flex items-center';
+                resetVisuals();
+            }
+        }
+
+        function resetVisuals() {
+            resetSimulationStates();
+            state.components.forEach(c => {
+                if(c.type === 'capacitor') c.props.storedV = 0;
+                if (c.type === 'multimeter') {
+                    const disp = document.getElementById(`disp_${c.id}`);
+                    if(disp) disp.innerText = '0.00V';
+                }
+                if (c.type === 'led') {
+                    const icon = document.getElementById(`icon_${c.id}`);
+                    if(icon) {
+                        const colorInfo = ledColors[c.props.ledColor || 'red'];
+                        icon.style.color = colorInfo.unlit;
+                        icon.classList.remove('glow-red', 'glow-green', 'glow-blue', 'glow-yellow', 'glow-white');
+                    }
+                }
+                if (c.type === 'motor') {
+                    const icon = document.getElementById(`icon_${c.id}`);
+                    if(icon) {
+                        icon.classList.remove('motor-spinning', 'motor-spinning-slow');
+                    }
+                }
+                const fire = document.getElementById(`fire_${c.id}`);
+                if(fire) fire.classList.add('hidden');
+            });
+        }
+
+        function solvePhysics() {
+            if (!state.isPlaying) return;
+
+            let parent = {};
+            function find(i) {
+                if (parent[i] === undefined) parent[i] = i;
+                if (parent[i] === i) return i;
+                return parent[i] = find(parent[i]);
+            }
+            function union(i, j) { parent[find(i)] = find(j); }
+
+            state.wires.forEach(w => union(w.from, w.to));
+            
+            state.components.forEach(c => {
+                if (c.type === 'switch' && c.props.closed) {
+                    union(`${c.id}_pin1`, `${c.id}_pin2`);
+                }
+            });
+
+            let isShortCircuit = false;
+            let fixedVoltages = {}; 
+            
+            const batteries = state.components.filter(c => c.type === 'battery');
+            batteries.forEach(b => {
+                const nodePlus = find(`${b.id}_pin1`);
+                const nodeMinus = find(`${b.id}_pin2`);
+                
+                if (nodePlus === nodeMinus) {
+                    isShortCircuit = true;
+                    document.getElementById(`fire_${b.id}`).classList.remove('hidden');
+                } else {
+                    document.getElementById(`fire_${b.id}`).classList.add('hidden');
+                    fixedVoltages[nodeMinus] = 0;
+                    fixedVoltages[nodePlus] = b.props.voltage;
+                }
+            });
+
+            if (isShortCircuit) {
+                if (!state.shortCircuitAlerted) {
+                    state.shortCircuitAlerted = true;
+                    playBurnSound();
+                    showToast("Fonte em Curto-Circuito! Resistência nula detectada.", "error");
+                }
+                state.components.filter(c => c.type !== 'battery').forEach(c => {
+                    const fire = document.getElementById(`fire_${c.id}`);
+                    const icon = document.getElementById(`icon_${c.id}`);
+                    if(fire) fire.classList.add('hidden');
+                    if(c.type === 'led' && icon) icon.classList.remove('glow-red', 'glow-green', 'glow-blue', 'glow-yellow', 'glow-white');
+                    if(c.type === 'motor' && icon) icon.classList.remove('motor-spinning', 'motor-spinning-slow');
+                });
+                return;
+            }
+
+            let nodes = new Set();
+            let edges = [];
+            
+            state.components.forEach(c => {
+                let n1 = find(`${c.id}_pin1`);
+                let n2 = find(`${c.id}_pin2`);
+                if (n1 === n2) return; 
+                
+                nodes.add(n1); nodes.add(n2);
+
+                if (c.type === 'resistor') {
+                    edges.push({ n1, n2, R: Math.max(1, c.props.resistance), compId: c.id });
+                } else if (c.type === 'potentiometer') {
+                    let potR = Math.max(1, (c.props.sliderPos / 100) * c.props.maxResistance);
+                    edges.push({ n1, n2, R: potR, compId: c.id });
+                } else if (c.type === 'capacitor') {
+                    if(c.props.storedV === undefined) c.props.storedV = 0;
+                    edges.push({ n1, n2, R: 10, isCapacitor: true, compId: c.id, storedV: c.props.storedV });
+                } else if (c.type === 'led') {
+                    edges.push({ n1, n2, isLed: true, compId: c.id, burnt: c.props.burnt }); 
+                } else if (c.type === 'motor') {
+                    edges.push({ n1, n2, R: Math.max(5, c.props.internalResistance), isMotor: true, compId: c.id });
+                }
+            });
+
+            let V = {};
+            nodes.forEach(n => V[n] = 0);
+            Object.keys(fixedVoltages).forEach(n => V[n] = fixedVoltages[n]);
+
+            for (let iter = 0; iter < 1000; iter++) {
+                nodes.forEach(n => {
+                    if (fixedVoltages[n] !== undefined) return;
+                    
+                    let sumVR = 0; 
+                    let sum1R = 0; 
+                    
+                    edges.forEach(e => {
+                        if (e.n1 === n || e.n2 === n) {
+                            let neighbor = (e.n1 === n) ? e.n2 : e.n1;
+                            let R = e.R;
+                            
+                            if (e.isLed) {
+                                if (e.burnt) {
+                                    R = 1e9;
+                                } else {
+                                    let vAnode = V[find(`${e.compId}_pin1`)]; 
+                                    let vCathode = V[find(`${e.compId}_pin2`)]; 
+                                    R = (vAnode > vCathode) ? 100 : 100000; 
+                                }
+                            } else if (e.isCapacitor) {
+                                let capPin1 = find(`${e.compId}_pin1`);
+                                let capPin2 = find(`${e.compId}_pin2`);
+                                let vCapDiff = (n === capPin1) ? e.storedV : -e.storedV;
+                                sumVR += (V[neighbor] + vCapDiff) / R;
+                                sum1R += 1 / R;
+                                return;
+                            }
+                            
+                            sumVR += V[neighbor] / R;
+                            sum1R += 1 / R;
+                        }
+                    });
+                    
+                    if (sum1R > 0) {
+                        let targetV = sumVR / sum1R;
+                        V[n] = V[n] * 0.5 + targetV * 0.5; 
+                    }
+                });
+            }
+
+            state.components.filter(c => c.type === 'capacitor').forEach(c => {
+                let v1 = V[find(`${c.id}_pin1`)] || 0;
+                let v2 = V[find(`${c.id}_pin2`)] || 0;
+                let circuitV = Math.abs(v1 - v2);
+                if(c.props.storedV === undefined) c.props.storedV = 0;
+                
+                let diff = circuitV - c.props.storedV;
+                let rate = Math.max(0.01, 1 / (c.props.capacitance * 0.1));
+                c.props.storedV += diff * rate;
+            });
+
+            state.components.forEach(c => {
+                let v1 = V[find(`${c.id}_pin1`)] || 0;
+                let v2 = V[find(`${c.id}_pin2`)] || 0;
+                
+                if (c.type === 'multimeter') {
+                    let diff = v1 - v2;
+                    document.getElementById(`disp_${c.id}`).innerText = diff.toFixed(2) + 'V';
+                }
+                
+                if (c.type === 'motor') {
+                    let icon = document.getElementById(`icon_${c.id}`);
+                    let diff = Math.abs(v1 - v2);
+                    if (icon) {
+                        if (diff >= 3.5) {
+                            icon.classList.remove('motor-spinning-slow');
+                            icon.classList.add('motor-spinning');
+                        } else if (diff >= 1.0) {
+                            icon.classList.remove('motor-spinning');
+                            icon.classList.add('motor-spinning-slow');
+                        } else {
+                            icon.classList.remove('motor-spinning', 'motor-spinning-slow');
+                        }
+                    }
+                }
+
+                if (c.type === 'led') {
+                    let el = document.getElementById(`icon_${c.id}`);
+                    let fire = document.getElementById(`fire_${c.id}`);
+                    const colorInfo = ledColors[c.props.ledColor || 'red'];
+                    
+                    if (c.props.burnt) {
+                        el.style.color = '#1f2937';
+                        el.classList.remove('glow-red', 'glow-green', 'glow-blue', 'glow-yellow', 'glow-white');
+                        fire.classList.remove('hidden');
+                        return;
+                    }
+
+                    let diff = v1 - v2;
+                    let current = diff > 0 ? diff / 100 : 0; 
+                    
+                    if (current > 0.04) { 
+                        c.props.burnt = true;
+                        playBurnSound();
+                        showToast(`O LED Queimou! A corrente de ${(current*1000).toFixed(0)}mA excedeu o limite máximo (40mA).`, "error");
+                        
+                        el.style.color = '#1f2937'; 
+                        el.classList.remove('glow-red', 'glow-green', 'glow-blue', 'glow-yellow', 'glow-white');
+                        fire.classList.remove('hidden');
+                    } else if (current >= 0.005) { 
+                        el.style.color = colorInfo.hex; 
+                        el.classList.remove('glow-red', 'glow-green', 'glow-blue', 'glow-yellow', 'glow-white');
+                        el.classList.add(colorInfo.litClass);
+                        fire.classList.add('hidden');
+                    } else { 
+                        el.style.color = colorInfo.unlit; 
+                        el.classList.remove('glow-red', 'glow-green', 'glow-blue', 'glow-yellow', 'glow-white');
+                        fire.classList.add('hidden');
+                    }
+                }
+            });
+        }
+
+        setInterval(solvePhysics, 100);
+
+        window.onload = () => {
+            initLibrary();
+        };
+
+        function selectItem(id, type) {
+            state.selectedItem = id;
+            state.selectedType = type;
+            
+            const delBtn = document.getElementById('deleteBtn');
+            delBtn.classList.remove('hidden');
+            delBtn.classList.add('flex');
+            
+            if (type === 'component') renderCanvas();
+            else renderWires();
+        }
+
+        function clearSelection() {
+            if (state.selectedItem) {
+                state.selectedItem = null;
+                state.selectedType = null;
+                
+                const delBtn = document.getElementById('deleteBtn');
+                if (delBtn) {
+                    delBtn.classList.add('hidden');
+                    delBtn.classList.remove('flex');
+                }
+                
+                renderCanvas(); 
+            }
+        }
+
+        function deleteSelected() {
+            if (!state.selectedItem) return;
+
+            if (state.isPlaying) {
+                showToast("Por favor, pause a simulação antes de remover componentes (Desenergize o circuito).", "warn");
+                return;
+            }
+
+            if (state.selectedType === 'component') {
+                state.components = state.components.filter(c => c.id !== state.selectedItem);
+                state.wires = state.wires.filter(w => !w.from.startsWith(state.selectedItem + '_') && !w.to.startsWith(state.selectedItem + '_'));
+            } else if (state.selectedType === 'wire') {
+                state.wires = state.wires.filter(w => w.id !== state.selectedItem);
+            }
+
+            clearSelection();
+            resetSimulationStates();
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                if(e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') {
+                    deleteSelected();
+                }
+            }
+        });
+
+    </script>
+</body>
+</html>
