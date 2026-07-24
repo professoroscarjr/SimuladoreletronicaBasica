@@ -2,32 +2,46 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simulador de Circuitos - Tinkercad Clone</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Simulador de Eletrônica para Iniciantes</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; overflow: hidden; }
+        
+        body { 
+            font-family: 'Inter', sans-serif; 
+            overflow: hidden; 
+            touch-action: none; /* Evita pull-to-refresh no mobile */
+        }
         
         .canvas-bg {
             background-color: #f8fafc;
-            background-image: radial-gradient(#cbd5e1 1.5px, transparent 1.5px);
-            background-size: 24px 24px;
+            background-image: 
+                linear-gradient(to right, #e2e8f0 1px, transparent 1px),
+                linear-gradient(to bottom, #e2e8f0 1px, transparent 1px);
+            background-size: 20px 20px;
         }
         
-        .comp-card { transition: box-shadow 0.2s, transform 0.1s; }
+        .comp-card { transition: box-shadow 0.2s, transform 0.1s; cursor: grab; }
+        .comp-card:active { cursor: grabbing; }
         .comp-card:hover { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
         .comp-icon { font-size: 2rem; transition: color 0.3s ease; }
         
         .pin { transition: all 0.2s; z-index: 20; }
         .pin:hover { transform: scale(1.5); background-color: #3b82f6; border-color: #bfdbfe; }
         
-        .wire-line { stroke: #3b82f6; stroke-width: 4; stroke-linecap: round; cursor: pointer; transition: stroke 0.2s; pointer-events: auto; }
-        .wire-line:hover { stroke: #ef4444; stroke-width: 6; }
+        .wire-line { 
+            stroke-width: 5; 
+            stroke-linecap: round; 
+            cursor: pointer; 
+            transition: stroke 0.2s, stroke-width 0.2s; 
+            pointer-events: auto; 
+        }
+        .wire-line:hover { stroke-width: 8; opacity: 0.8; }
         
-        .selected-comp { border-color: #3b82f6 !important; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.4) !important; }
-        .selected-wire { stroke: #eab308 !important; stroke-width: 6px !important; filter: drop-shadow(0 0 4px #eab308); }
+        .selected-comp { border-color: #3b82f6 !important; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3) !important; }
+        .selected-wire { stroke: #eab308 !important; stroke-width: 7px !important; filter: drop-shadow(0 0 4px rgba(234, 179, 8, 0.8)); }
         
         .glow-red { text-shadow: 0 0 15px #ef4444, 0 0 30px #ef4444; color: #ef4444 !important; }
         .glow-green { text-shadow: 0 0 15px #22c55e, 0 0 30px #22c55e; color: #22c55e !important; }
@@ -45,49 +59,86 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-
-        .motor-spinning {
-            animation: spinFast 0.2s linear infinite;
+        
+        @keyframes soundWave {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            100% { transform: scale(1.2); opacity: 0; }
         }
-        .motor-spinning-slow {
-            animation: spinFast 0.6s linear infinite;
+
+        .motor-spinning { animation: spinFast 0.2s linear infinite; }
+        .motor-spinning-slow { animation: spinFast 0.6s linear infinite; }
+        
+        .buzzer-ringing::after {
+            content: '';
+            position: absolute;
+            width: 40px; height: 40px;
+            border: 2px solid #3b82f6;
+            border-radius: 50%;
+            animation: soundWave 0.8s infinite ease-out;
+            pointer-events: none;
         }
 
         /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* Slider LDR/Pot */
+        .mini-slider {
+            -webkit-appearance: none;
+            width: 100%; height: 4px; border-radius: 2px;
+            background: #e2e8f0; outline: none;
+        }
+        .mini-slider::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none;
+            width: 12px; height: 12px; border-radius: 50%;
+            background: #3b82f6; cursor: pointer;
+        }
     </style>
 </head>
-<body class="bg-slate-100 h-screen flex flex-col">
+<body class="bg-slate-50 h-screen flex flex-col">
 
     <!-- Header -->
-    <header class="h-16 bg-slate-900 text-white flex items-center justify-between px-6 shadow-md z-30 relative">
+    <header class="h-16 bg-slate-900 text-white flex items-center justify-between px-4 sm:px-6 shadow-md z-30 relative">
         <div class="flex items-center space-x-3">
             <i class="fas fa-microchip text-blue-400 text-2xl"></i>
-            <h1 class="text-xl font-bold tracking-tight">Simulador de Eletrônica</h1>
+            <h1 class="text-lg sm:text-xl font-bold tracking-tight hidden sm:block">Simulador de Eletrônica</h1>
+            <h1 class="text-lg font-bold tracking-tight sm:hidden">Simulador</h1>
         </div>
-        <div class="flex items-center">
-            <button id="deleteBtn" onclick="deleteSelected()" class="hidden mr-3 px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-lg shadow-md font-semibold transition-all items-center">
-                <i class="fas fa-trash mr-2"></i>Remover
+        <div class="flex items-center space-x-1 sm:space-x-3">
+            <!-- Seletor de Cores de Fio -->
+            <div class="flex items-center space-x-1 sm:space-x-1.5 bg-slate-800 p-1 sm:p-1.5 rounded-lg mr-1 sm:mr-0" id="wireColorPicker" title="Cor do Fio">
+                <button onclick="setWireColor('#94a3b8', this)" class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-[#94a3b8] border-2 border-white transition-transform transform scale-110 color-btn shadow-sm"></button>
+                <button onclick="setWireColor('#ef4444', this)" class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-[#ef4444] border-2 border-transparent transition-transform color-btn shadow-sm"></button>
+                <button onclick="setWireColor('#1f2937', this)" class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-[#1f2937] border-2 border-transparent transition-transform color-btn shadow-sm"></button>
+                <button onclick="setWireColor('#22c55e', this)" class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-[#22c55e] border-2 border-transparent transition-transform color-btn shadow-sm"></button>
+                <button onclick="setWireColor('#3b82f6', this)" class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-[#3b82f6] border-2 border-transparent transition-transform color-btn shadow-sm"></button>
+                <button onclick="setWireColor('#eab308', this)" class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-[#eab308] border-2 border-transparent transition-transform color-btn shadow-sm"></button>
+            </div>
+
+            <button onclick="openHelpModal()" class="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-full transition-colors" title="Ajuda">
+                <i class="fas fa-question text-sm sm:text-base"></i>
             </button>
-            <button id="playBtn" onclick="toggleSimulation()" class="px-5 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg shadow-md font-semibold transition-all flex items-center">
-                <i class="fas fa-play mr-2"></i>Iniciar Simulação
+            <button id="deleteBtn" onclick="deleteSelected()" class="hidden px-2 sm:px-4 py-1.5 sm:py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg shadow-md font-semibold transition-all items-center text-xs sm:text-base">
+                <i class="fas fa-trash sm:mr-2"></i><span class="hidden sm:inline">Remover</span>
+            </button>
+            <button id="playBtn" onclick="toggleSimulation()" class="px-3 sm:px-5 py-1.5 sm:py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg shadow-md font-semibold transition-all flex items-center text-xs sm:text-base">
+                <i class="fas fa-play mr-1 sm:mr-2"></i><span>Iniciar</span>
             </button>
         </div>
     </header>
 
     <!-- Main Layout -->
-    <div class="flex flex-1 relative overflow-hidden">
+    <div class="flex flex-1 relative overflow-hidden flex-col sm:flex-row">
         
         <!-- Sidebar: Componentes -->
-        <aside class="w-72 bg-white border-r border-slate-200 flex flex-col shadow-lg z-20">
-            <div class="p-4 bg-slate-50 border-b border-slate-200">
-                <h2 class="font-semibold text-slate-700"><i class="fas fa-cubes mr-2"></i>Componentes Básicos</h2>
-                <p class="text-xs text-slate-500 mt-1">Arraste para a área de trabalho</p>
+        <aside class="w-full sm:w-72 bg-white border-b sm:border-r border-slate-200 flex flex-col shadow-lg z-20 h-40 sm:h-auto overflow-hidden shrink-0">
+            <div class="p-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                <h2 class="font-semibold text-slate-700 text-sm sm:text-base"><i class="fas fa-cubes mr-2"></i>Componentes</h2>
             </div>
-            <div class="p-4 flex-1 overflow-y-auto space-y-3" id="library">
+            <!-- Em telas pequenas, rola horizontalmente, em grandes rola verticalmente -->
+            <div class="p-3 flex sm:flex-col overflow-auto gap-3 sm:space-y-3 h-full" id="library">
                 <!-- Injetado via JS -->
             </div>
         </aside>
@@ -102,16 +153,16 @@
     </div>
 
     <!-- Container para Notificações (Toasts) -->
-    <div id="toastContainer" class="fixed bottom-6 right-6 z-50 flex flex-col gap-3 pointer-events-none"></div>
+    <div id="toastContainer" class="fixed bottom-6 left-1/2 -translate-x-1/2 sm:left-auto sm:right-6 sm:translate-x-0 z-50 flex flex-col gap-3 pointer-events-none w-[90%] sm:w-auto"></div>
 
     <!-- Modal Configuração de Componentes -->
-    <div id="propModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-40 z-50 flex items-center justify-center backdrop-blur-sm transition-opacity">
-        <div class="bg-white p-6 rounded-2xl shadow-2xl w-80 transform transition-all scale-100">
+    <div id="propModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-40 z-50 flex items-center justify-center backdrop-blur-sm transition-opacity px-4">
+        <div class="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-sm transform transition-all scale-100">
             <h3 class="text-xl font-bold text-slate-800 mb-4 flex items-center">
-                <i class="fas fa-cog mr-2 text-blue-500"></i> Configurar
+                <i class="fas fa-sliders-h mr-2 text-blue-500"></i> Configurar
             </h3>
             <label id="modalLabel" class="block text-sm font-medium text-slate-600 mb-2">Valor</label>
-            <input type="number" id="propValue" class="w-full border-2 border-slate-200 rounded-lg p-3 text-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all outline-none mb-6" min="0" step="0.1" placeholder="Ex: 5">
+            <input type="number" id="propValue" class="w-full border-2 border-slate-200 rounded-lg p-3 text-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all outline-none mb-6" min="0" step="0.1">
             <select id="propSelect" class="hidden w-full border-2 border-slate-200 rounded-lg p-3 text-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all outline-none mb-6">
                 <option value="red">Vermelho</option>
                 <option value="green">Verde</option>
@@ -122,32 +173,57 @@
             <input type="hidden" id="editCompId">
             <div class="flex justify-end space-x-3">
                 <button onclick="closeModal()" class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition-colors">Cancelar</button>
-                <button onclick="saveProps()" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow-md shadow-blue-200 transition-colors">Aplicar</button>
+                <button onclick="saveProps()" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow-md transition-colors">Aplicar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Ajuda -->
+    <div id="helpModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-60 z-50 flex items-center justify-center backdrop-blur-sm px-4">
+        <div class="bg-white p-6 md:p-8 rounded-2xl shadow-2xl w-full max-w-md transform transition-all">
+            <h2 class="text-2xl font-bold text-slate-800 mb-4 border-b pb-2"><i class="fas fa-graduation-cap text-blue-500 mr-2"></i>Bem-vindo ao Simulador!</h2>
+            
+            <div class="space-y-4 text-slate-600 text-sm">
+                <p><i class="fas fa-hand-pointer text-blue-500 w-5"></i> <strong>Adicionar:</strong> Arraste os componentes do painel lateral para a área pontilhada.</p>
+                <p><i class="fas fa-project-diagram text-blue-500 w-5"></i> <strong>Conectar Fios:</strong> Clique (ou toque) na bolinha cinza de um componente, depois clique em outra para ligar.</p>
+                <p><i class="fas fa-play text-green-500 w-5"></i> <strong>Simular:</strong> Clique em "Iniciar" no topo para dar vida ao circuito.</p>
+                <p><i class="fas fa-cog text-slate-500 w-5"></i> <strong>Configurar:</strong> Passe o mouse (ou segure no celular) sobre o componente para abrir a engrenagem e alterar seu valor.</p>
+                <p><i class="fas fa-palette text-pink-500 w-5"></i> <strong>Cores:</strong> Escolha a cor no menu superior. Com a simulação rodando, fios <strong>cinzas</strong> ficarão Vermelhos (<span class="text-red-500 font-bold">+</span>) ou Pretos (<span class="font-bold">GND</span>) dependendo da energia.</p>
+            </div>
+            
+            <div class="mt-6 flex justify-end">
+                <button onclick="closeHelpModal()" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-md w-full sm:w-auto">Entendi, vamos lá!</button>
             </div>
         </div>
     </div>
 
     <script>
+        const GRID_SIZE = 20;
+
         const state = {
             components: [], // { id, type, x, y, props }
             wires: [],      // { id, from: 'compId_pin1', to: 'compId_pin2' }
             isPlaying: false,
-            wiringMode: null,
+            wiringMode: null, // armazena o pino de origem ao criar um fio
             mousePos: { x: 0, y: 0 },
             draggedComp: null,
             dragOffset: { x: 0, y: 0 },
             shortCircuitAlerted: false,
             selectedItem: null,
-            selectedType: null
+            selectedType: null, // 'component' ou 'wire'
+            currentWireColor: '#94a3b8'
         };
 
+        // Definição dos Componentes Disponíveis
         const componentDefs = {
-            battery: { name: 'Fonte de Bancada', icon: 'fa-plug', color: '#10b981', props: { voltage: 5 }, polarity: true },
+            battery: { name: 'Fonte de Bancada', icon: 'fa-plug', color: '#10b981', props: { voltage: 5, isOn: true }, polarity: true },
             resistor: { name: 'Resistor', icon: 'fa-wave-square', color: '#f59e0b', props: { resistance: 330 }, polarity: false },
             potentiometer: { name: 'Potenciômetro', icon: 'fa-sliders-h', color: '#d97706', props: { maxResistance: 10000, sliderPos: 50 }, polarity: false },
+            photoresistor: { name: 'LDR (Luz)', icon: 'fa-sun', color: '#fbbf24', props: { lightLevel: 50 }, polarity: false },
             capacitor: { name: 'Capacitor', icon: 'fa-battery-half', color: '#8b5cf6', props: { capacitance: 100 }, polarity: true },
             led: { name: 'LED', icon: 'fa-lightbulb', color: '#7f1d1d', props: { burnt: false, ledColor: 'red' }, polarity: true },
             motor: { name: 'Motor CC 5V', icon: 'fa-fan', color: '#0284c7', props: { ratedVoltage: 5, internalResistance: 20 }, polarity: true },
+            buzzer: { name: 'Buzzer (Som)', icon: 'fa-volume-up', color: '#111827', props: { frequency: 440 }, polarity: true },
             switch: { name: 'Interruptor', icon: 'fa-toggle-off', color: '#64748b', props: { closed: false }, polarity: false },
             multimeter: { name: 'Multímetro', icon: 'fa-tachometer-alt', color: '#3b82f6', props: {}, polarity: true }
         };
@@ -161,6 +237,8 @@
         };
 
         let audioCtx;
+        let activeBuzzers = {}; // { compId: { osc, gain } }
+
         function initAudio() {
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -192,31 +270,62 @@
             osc2.connect(gain);
             gain.connect(audioCtx.destination);
             
-            osc1.start();
-            osc2.start();
+            osc1.start(); osc2.start();
             osc1.stop(audioCtx.currentTime + 0.3);
             osc2.stop(audioCtx.currentTime + 0.3);
         }
 
-        function showToast(message, type = 'error') {
+        function updateBuzzerAudio(compId, isRinging, frequency = 440) {
+            if (!audioCtx || !state.isPlaying) isRinging = false;
+            
+            if (isRinging) {
+                if (!activeBuzzers[compId]) {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.value = frequency;
+                    gain.gain.value = 0.1; // Volume suave para não assustar
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start();
+                    activeBuzzers[compId] = { osc, gain };
+                }
+            } else {
+                if (activeBuzzers[compId]) {
+                    activeBuzzers[compId].gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                    setTimeout(() => {
+                        if(activeBuzzers[compId]) {
+                            activeBuzzers[compId].osc.stop();
+                            delete activeBuzzers[compId];
+                        }
+                    }, 100);
+                }
+            }
+        }
+
+        function stopAllAudio() {
+            Object.keys(activeBuzzers).forEach(id => updateBuzzerAudio(id, false));
+        }
+
+        function showToast(message, type = 'error', duration = 4000) {
             const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
             const bg = type === 'error' ? 'bg-red-600' : (type === 'warn' ? 'bg-yellow-500' : 'bg-green-500');
-            const icon = type === 'error' ? 'fa-bolt' : 'fa-info-circle';
+            const icon = type === 'error' ? 'fa-bolt' : (type === 'warn' ? 'fa-exclamation-triangle' : 'fa-info-circle');
             
-            toast.className = `${bg} text-white px-5 py-3 rounded-lg shadow-xl font-medium transition-all duration-300 opacity-0 transform translate-y-4 flex items-center`;
-            toast.innerHTML = `<i class="fas ${icon} mr-3 text-lg"></i> <span>${message}</span>`;
+            toast.className = `${bg} text-white px-5 py-3 rounded-lg shadow-xl font-medium transition-all duration-300 opacity-0 transform translate-y-4 flex items-center text-sm md:text-base max-w-sm leading-tight`;
+            toast.innerHTML = `<i class="fas ${icon} mr-3 text-2xl"></i> <span class="flex-1">${message}</span>`;
             
             container.appendChild(toast);
             
-            setTimeout(() => {
-                toast.classList.remove('opacity-0', 'translate-y-4');
-            }, 10);
+            // Reflow para animação
+            void toast.offsetWidth; 
+            toast.classList.remove('opacity-0', 'translate-y-4');
             
             setTimeout(() => {
                 toast.classList.add('opacity-0', 'translate-y-4');
                 setTimeout(() => toast.remove(), 300);
-            }, 4000);
+            }, duration);
         }
 
         function initLibrary() {
@@ -224,28 +333,41 @@
             Object.keys(componentDefs).forEach(type => {
                 const def = componentDefs[type];
                 const el = document.createElement('div');
-                el.className = 'flex items-center p-3 bg-white border border-slate-200 rounded-lg cursor-grab hover:bg-slate-50 hover:border-blue-300 transition-all shadow-sm';
+                el.className = 'flex items-center p-2 sm:p-3 bg-white border border-slate-200 rounded-lg cursor-grab hover:bg-slate-100 transition-all shadow-sm shrink-0 sm:shrink min-w-[140px] sm:min-w-0';
+                
+                // Suporte a Mouse (Desktop)
                 el.draggable = true;
                 el.ondragstart = (e) => {
                     e.dataTransfer.setData('type', type);
                     e.dataTransfer.effectAllowed = 'copy';
                 };
+                
+                // Suporte a Touch (Mobile) - Cria componente e já começa a arrastar
+                el.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    spawnAndDragComponent(type, e.touches[0].clientX, e.touches[0].clientY);
+                }, {passive: false});
+
+                let extras = '';
+                if(type === 'resistor') extras = 'Padrão: 330Ω';
+                if(type === 'potentiometer') extras = 'Padrão: 10kΩ';
+                if(type === 'battery' || type === 'motor') extras = 'Padrão: 5V';
+                if(type === 'buzzer') extras = 'Tensão min: 3V';
+
                 el.innerHTML = `
-                    <div class="w-10 h-10 flex items-center justify-center rounded-md bg-slate-100 mr-3">
-                        <i class="fas ${def.icon} text-xl" style="color: ${def.color}"></i>
+                    <div class="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-md bg-slate-100 mr-2 sm:mr-3 shrink-0">
+                        <i class="fas ${def.icon} sm:text-xl" style="color: ${def.color}"></i>
                     </div>
-                    <div>
-                        <div class="font-medium text-slate-700 text-sm">${def.name}</div>
-                        ${type === 'resistor' ? `<div class="text-[10px] text-slate-400">Padrão: 330Ω</div>` : ''}
-                        ${type === 'potentiometer' ? `<div class="text-[10px] text-slate-400">Padrão: 10kΩ</div>` : ''}
-                        ${type === 'battery' ? `<div class="text-[10px] text-slate-400">Padrão: 5V</div>` : ''}
-                        ${type === 'motor' ? `<div class="text-[10px] text-slate-400">Padrão: 5V CC</div>` : ''}
+                    <div class="truncate">
+                        <div class="font-medium text-slate-700 text-xs sm:text-sm truncate">${def.name}</div>
+                        ${extras ? `<div class="text-[9px] sm:text-[10px] text-slate-400 truncate">${extras}</div>` : ''}
                     </div>
                 `;
                 lib.appendChild(el);
             });
         }
 
+        // Sistema de drop via Mouse
         const canvasContainer = document.getElementById('canvasContainer');
         const canvas = document.getElementById('canvas');
 
@@ -254,24 +376,36 @@
             e.preventDefault();
             const type = e.dataTransfer.getData('type');
             if (type && componentDefs[type]) {
-                const rect = canvasContainer.getBoundingClientRect();
-                const comp = {
-                    id: 'comp_' + Math.random().toString(36).substr(2, 9),
-                    type: type,
-                    x: e.clientX - rect.left - 45,
-                    y: e.clientY - rect.top - 45,
-                    props: JSON.parse(JSON.stringify(componentDefs[type].props))
-                };
-                state.components.push(comp);
-                renderCanvas();
+                addComponent(type, e.clientX, e.clientY);
             }
         };
 
-        function resetSimulationStates() {
-            state.shortCircuitAlerted = false;
-            state.components.forEach(c => {
-                if(c.props.burnt !== undefined) c.props.burnt = false;
-            });
+        function addComponent(type, clientX, clientY) {
+            const rect = canvasContainer.getBoundingClientRect();
+            // Snap na grade de 20px
+            let rawX = clientX - rect.left - 45;
+            let rawY = clientY - rect.top - 45;
+            let snapX = Math.round(rawX / GRID_SIZE) * GRID_SIZE;
+            let snapY = Math.round(rawY / GRID_SIZE) * GRID_SIZE;
+
+            const comp = {
+                id: 'comp_' + Math.random().toString(36).substr(2, 9),
+                type: type,
+                x: snapX,
+                y: snapY,
+                props: JSON.parse(JSON.stringify(componentDefs[type].props))
+            };
+            state.components.push(comp);
+            renderCanvas();
+            return comp;
+        }
+
+        function spawnAndDragComponent(type, clientX, clientY) {
+            const comp = addComponent(type, clientX, clientY);
+            // Simular início do drag
+            selectItem(comp.id, 'component');
+            state.draggedComp = comp;
+            state.dragOffset = { x: 45, y: 45 }; // centro do componente
         }
 
         function renderCanvas() {
@@ -282,76 +416,102 @@
                 
                 let selectedClass = (state.selectedItem === comp.id) ? 'selected-comp' : '';
                 el.className = `absolute bg-white rounded-xl shadow-md border-2 border-slate-200 flex flex-col items-center justify-center group select-none comp-card z-10 ${selectedClass}`;
-                el.style.width = (comp.type === 'potentiometer' || comp.type === 'motor') ? '100px' : '90px';
-                el.style.height = '90px';
+                
+                // Tamanhos responsivos e específicos por componente
+                let w = 90, h = 90;
+                if(comp.type === 'potentiometer' || comp.type === 'photoresistor' || comp.type === 'motor') w = 100;
+                
+                el.style.width = w + 'px';
+                el.style.height = h + 'px';
                 el.style.left = `${comp.x}px`;
                 el.style.top = `${comp.y}px`;
                 el.id = comp.id;
 
-                el.onmousedown = (e) => startComponentDrag(e, comp);
+                // Eventos de arrasto mouse/touch
+                el.addEventListener('mousedown', (e) => startComponentDrag(e, comp));
+                el.addEventListener('touchstart', (e) => startComponentDrag(e, comp), {passive: false});
 
                 let innerHTML = '';
 
+                // Polaridade
                 if(def.polarity) {
-                    innerHTML += `<div class="absolute -left-3 text-[12px] text-white font-bold bg-red-600 rounded-full w-6 h-6 flex items-center justify-center shadow-md z-20 border-2 border-white">+</div>`;
-                    innerHTML += `<div class="absolute -right-3 text-[16px] text-white font-bold bg-slate-800 rounded-full w-6 h-6 flex items-center justify-center shadow-md z-20 border-2 border-white pb-0.5">-</div>`;
+                    innerHTML += `<div class="absolute -left-3 top-1/2 -translate-y-6 text-[10px] text-white font-bold bg-red-600 rounded-full w-5 h-5 flex items-center justify-center shadow-md z-20 border border-white">+</div>`;
+                    innerHTML += `<div class="absolute -right-3 top-1/2 -translate-y-6 text-[12px] text-white font-bold bg-slate-800 rounded-full w-5 h-5 flex items-center justify-center shadow-md z-20 border border-white pb-0.5">-</div>`;
                 }
 
+                // Elementos visuais internos
                 if(comp.type === 'multimeter') {
-                    innerHTML += `<div class="text-[11px] bg-slate-900 text-green-400 font-mono px-2 py-0.5 rounded shadow-inner mb-1" id="disp_${comp.id}">0.00V</div>`;
+                    innerHTML += `<div class="text-[11px] bg-slate-900 text-green-400 font-mono px-2 py-0.5 rounded shadow-inner mb-1 w-16 text-center" id="disp_${comp.id}">0.00V</div>`;
                 }
                 
                 let iconClass = def.icon;
-                if(comp.type === 'switch' && comp.props.closed) iconClass = 'fa-toggle-on';
+                if(comp.type === 'switch' && comp.props.closed) iconClass = 'fa-toggle-on text-green-500';
                 
                 let color = comp.props.burnt ? '#1f2937' : def.color;
                 if (comp.type === 'led') {
                     const cInfo = ledColors[comp.props.ledColor || 'red'];
                     color = comp.props.burnt ? '#1f2937' : cInfo.unlit;
+                } else if (comp.type === 'battery' && comp.props.isOn === false) {
+                    color = '#94a3b8'; // Fica cinza quando desligada
                 }
                 
-                let extraIconAttr = (comp.type === 'motor') ? `id="icon_${comp.id}"` : `id="icon_${comp.id}"`;
-                innerHTML += `<i class="fas ${iconClass} comp-icon" style="color: ${color};" ${extraIconAttr}></i>`;
-                innerHTML += `<i class="fas fa-fire absolute -top-3 left-1/2 -translate-x-1/2 text-2xl ${comp.props.burnt ? 'glow-fire' : 'hidden'} z-30" id="fire_${comp.id}"></i>`;
+                innerHTML += `<div class="relative"><i class="fas ${iconClass} comp-icon" style="color: ${color};" id="icon_${comp.id}"></i>`;
+                innerHTML += `<i class="fas fa-fire absolute -top-4 left-1/2 -translate-x-1/2 text-xl ${comp.props.burnt ? 'glow-fire' : 'hidden'} z-30" id="fire_${comp.id}"></i></div>`;
 
+                // Botão de Configuração
                 const gearHTML = `
-                    <div onmousedown="event.stopPropagation();" onclick="openPropModal('${comp.id}')" 
-                         class="absolute -top-3 -right-3 bg-blue-600 hover:bg-blue-500 text-white rounded-full w-7 h-7 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer shadow-lg z-20 hover:scale-110">
-                        <i class="fas fa-cog text-sm pointer-events-none"></i>
+                    <div onmousedown="event.stopPropagation();" ontouchstart="event.stopPropagation();" onclick="openPropModal('${comp.id}')"
+                         class="absolute -top-3 -right-3 bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center sm:opacity-0 group-hover:opacity-100 transition-all cursor-pointer shadow-lg z-30 hover:scale-110">
+                        <i class="fas fa-cog text-sm"></i>
                     </div>`;
 
+                // Controles e Labels específicos
                 if (comp.type === 'resistor') {
-                    innerHTML += `<div class="text-[10px] mt-1 text-slate-600 font-bold bg-slate-100 px-1.5 rounded" id="lbl_${comp.id}">${comp.props.resistance}Ω</div>`;
+                    innerHTML += `<div class="text-[10px] mt-1 text-slate-600 font-bold bg-slate-100 px-1.5 py-0.5 rounded" id="lbl_${comp.id}">${comp.props.resistance}Ω</div>`;
                     innerHTML += gearHTML;
-                } else if (comp.type === 'potentiometer') {
-                    let currentR = Math.round((comp.props.sliderPos / 100) * comp.props.maxResistance);
-                    let labelR = currentR >= 1000 ? (currentR/1000).toFixed(1) + 'kΩ' : currentR + 'Ω';
-                    innerHTML += `<div class="text-[9px] mt-0.5 text-slate-600 font-bold bg-slate-100 px-1 rounded" id="lbl_${comp.id}">${labelR}</div>`;
-                    innerHTML += `<input type="range" min="0" max="100" value="${comp.props.sliderPos}" oninput="updatePotSlider('${comp.id}', this.value)" onmousedown="event.stopPropagation();" class="w-16 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer mt-1">`;
-                    innerHTML += gearHTML;
+                } else if (comp.type === 'potentiometer' || comp.type === 'photoresistor') {
+                    let isPot = comp.type === 'potentiometer';
+                    let val = isPot ? comp.props.sliderPos : comp.props.lightLevel;
+                    let label = isPot ? 
+                        (Math.round((val/100)*comp.props.maxResistance) >= 1000 ? (Math.round((val/100)*comp.props.maxResistance)/1000).toFixed(1)+'kΩ' : Math.round((val/100)*comp.props.maxResistance)+'Ω') :
+                        `Luz: ${val}%`;
+                    
+                    innerHTML += `<div class="text-[9px] mt-1 text-slate-600 font-bold bg-slate-100 px-1 rounded" id="lbl_${comp.id}">${label}</div>`;
+                    innerHTML += `<input type="range" min="0" max="100" value="${val}" oninput="updateSlider('${comp.id}', this.value)" onmousedown="event.stopPropagation();" ontouchstart="event.stopPropagation();" class="mini-slider mt-1 w-[80%]">`;
+                    if(isPot) innerHTML += gearHTML; // LDR não tem config extra
                 } else if (comp.type === 'battery') {
-                    innerHTML += `<div class="text-[10px] mt-1 text-slate-600 font-bold bg-slate-100 px-1.5 rounded" id="lbl_${comp.id}">${comp.props.voltage}V</div>`;
+                    const pwrBg = (comp.props.isOn !== false) ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600';
+                    innerHTML += `
+                        <div onmousedown="event.stopPropagation();" ontouchstart="event.stopPropagation();" onclick="togglePower('${comp.id}')"
+                             class="absolute -top-3 -left-3 ${pwrBg} text-white rounded-full w-8 h-8 flex items-center justify-center transition-all cursor-pointer shadow-lg z-30 hover:scale-110" title="Ligar/Desligar">
+                            <i class="fas fa-power-off text-sm pointer-events-none"></i>
+                        </div>`;
+                    innerHTML += `<div class="text-[10px] mt-1 text-slate-600 font-bold bg-slate-100 px-1.5 py-0.5 rounded">${comp.props.voltage}V</div>`;
                     innerHTML += gearHTML;
                 } else if (comp.type === 'capacitor') {
-                    innerHTML += `<div class="text-[10px] mt-1 text-slate-600 font-bold bg-slate-100 px-1.5 rounded" id="lbl_${comp.id}">${comp.props.capacitance}µF</div>`;
+                    innerHTML += `<div class="text-[10px] mt-1 text-slate-600 font-bold bg-slate-100 px-1.5 py-0.5 rounded">${comp.props.capacitance}µF</div>`;
+                    let currentV = comp.props.storedV ? Math.abs(comp.props.storedV).toFixed(1) : "0.0";
+                    innerHTML += `<div class="text-[9px] mt-0.5 text-blue-600 font-bold bg-blue-50 px-1 rounded shadow-inner" id="cap_disp_${comp.id}">${currentV}V</div>`;
                     innerHTML += gearHTML;
                 } else if (comp.type === 'led') {
                     const corNome = ledColors[comp.props.ledColor || 'red'].name;
-                    innerHTML += `<div class="text-[10px] mt-1 text-slate-500 font-semibold">LED ${corNome}</div>`;
+                    innerHTML += `<div class="text-[9px] mt-1 text-slate-500 font-semibold">${corNome}</div>`;
                     innerHTML += gearHTML;
-                } else if (comp.type === 'motor') {
-                    innerHTML += `<div class="text-[10px] mt-1 text-slate-600 font-bold bg-slate-100 px-1.5 rounded" id="lbl_${comp.id}">5V CC</div>`;
+                } else if (comp.type === 'motor' || comp.type === 'buzzer') {
+                    innerHTML += `<div class="text-[9px] mt-1 text-slate-500 font-semibold">${def.name}</div>`;
                     innerHTML += gearHTML;
                 } else {
-                    innerHTML += `<div class="text-[10px] mt-1 text-slate-500 font-semibold">${def.name}</div>`;
+                    innerHTML += `<div class="text-[9px] mt-1 text-slate-500 font-semibold">${def.name}</div>`;
                 }
 
+                // Overlay de clique para Interruptor
                 if(comp.type === 'switch') {
-                    innerHTML += `<div class="absolute inset-0 cursor-pointer z-10 rounded-xl" onclick="toggleSwitch('${comp.id}')" onmousedown="event.stopPropagation();"></div>`;
+                    innerHTML += `<div class="absolute inset-0 cursor-pointer z-10 rounded-xl" onclick="toggleSwitch('${comp.id}')" onmousedown="event.stopPropagation();" ontouchstart="event.stopPropagation();"></div>`;
                 }
 
-                innerHTML += `<div class="pin absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 bg-slate-400 rounded-full border-[3px] border-white shadow-md cursor-crosshair hover:bg-blue-500" id="${comp.id}_pin1" onclick="handlePinClick('${comp.id}_pin1', event)" onmousedown="event.stopPropagation();"></div>`;
-                innerHTML += `<div class="pin absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-4 h-4 bg-slate-400 rounded-full border-[3px] border-white shadow-md cursor-crosshair hover:bg-blue-500" id="${comp.id}_pin2" onclick="handlePinClick('${comp.id}_pin2', event)" onmousedown="event.stopPropagation();"></div>`;
+                // Pinos (Conectores)
+                innerHTML += `<div class="pin absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 bg-slate-400 rounded-full border-[3px] border-white shadow-md cursor-crosshair hover:bg-blue-500" id="${comp.id}_pin1" onmousedown="handlePinClick('${comp.id}_pin1', event)" ontouchstart="handlePinClick('${comp.id}_pin1', event)"></div>`;
+                innerHTML += `<div class="pin absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-4 h-4 bg-slate-400 rounded-full border-[3px] border-white shadow-md cursor-crosshair hover:bg-blue-500" id="${comp.id}_pin2" onmousedown="handlePinClick('${comp.id}_pin2', event)" ontouchstart="handlePinClick('${comp.id}_pin2', event)"></div>`;
 
                 el.innerHTML = innerHTML;
                 canvas.appendChild(el);
@@ -359,161 +519,137 @@
             renderWires();
         }
 
-        function updatePotSlider(id, val) {
+        // Atualização de sliders na UI
+        function updateSlider(id, val) {
             const comp = state.components.find(c => c.id === id);
             if (comp) {
-                comp.props.sliderPos = parseFloat(val);
-                let currentR = Math.round((comp.props.sliderPos / 100) * comp.props.maxResistance);
-                let labelR = currentR >= 1000 ? (currentR/1000).toFixed(1) + 'kΩ' : currentR + 'Ω';
-                const lbl = document.getElementById(`lbl_${id}`);
-                if (lbl) lbl.innerText = labelR;
+                if(comp.type === 'potentiometer') {
+                    comp.props.sliderPos = parseFloat(val);
+                    let currentR = Math.round((comp.props.sliderPos / 100) * comp.props.maxResistance);
+                    let labelR = currentR >= 1000 ? (currentR/1000).toFixed(1) + 'kΩ' : currentR + 'Ω';
+                    document.getElementById(`lbl_${id}`).innerText = labelR;
+                } else if (comp.type === 'photoresistor') {
+                    comp.props.lightLevel = parseFloat(val);
+                    document.getElementById(`lbl_${id}`).innerText = `Luz: ${comp.props.lightLevel}%`;
+                }
             }
         }
 
         function startComponentDrag(e, comp) {
-            if(e.button !== 0 || state.wiringMode) return;
+            if (e.type === 'mousedown' && e.button !== 0) return; // Apenas botão esquerdo
+            if (state.wiringMode) return;
+            
+            e.preventDefault(); // Evita scroll no mobile ao arrastar
             selectItem(comp.id, 'component');
             state.draggedComp = comp;
+            
             const el = document.getElementById(comp.id);
             const rect = el.getBoundingClientRect();
+            
+            let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
             state.dragOffset = {
-                x: e.clientX - rect.left,
-                y: e.clientY - rect.top
+                x: clientX - rect.left,
+                y: clientY - rect.top
             };
             el.style.zIndex = '50';
         }
 
-        canvasContainer.onmousemove = (e) => {
+        function handleMove(clientX, clientY) {
             const rect = canvasContainer.getBoundingClientRect();
-            state.mousePos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            state.mousePos = { x: clientX - rect.left, y: clientY - rect.top };
 
             if (state.draggedComp) {
-                const newX = e.clientX - rect.left - state.dragOffset.x;
-                const newY = e.clientY - rect.top - state.dragOffset.y;
-                state.draggedComp.x = Math.max(0, Math.min(newX, rect.width - 90));
-                state.draggedComp.y = Math.max(0, Math.min(newY, rect.height - 90));
+                let rawX = clientX - rect.left - state.dragOffset.x;
+                let rawY = clientY - rect.top - state.dragOffset.y;
+                
+                // Snap to Grid (20px)
+                state.draggedComp.x = Math.max(0, Math.min(Math.round(rawX / GRID_SIZE) * GRID_SIZE, rect.width - 90));
+                state.draggedComp.y = Math.max(0, Math.min(Math.round(rawY / GRID_SIZE) * GRID_SIZE, rect.height - 90));
                 
                 const el = document.getElementById(state.draggedComp.id);
-                el.style.left = `${state.draggedComp.x}px`;
-                el.style.top = `${state.draggedComp.y}px`;
+                if(el) {
+                    el.style.left = `${state.draggedComp.x}px`;
+                    el.style.top = `${state.draggedComp.y}px`;
+                }
                 renderWires();
             }
             if (state.wiringMode) renderWires();
-        };
+        }
 
-        window.onmouseup = () => {
+        window.addEventListener('mousemove', (e) => handleMove(e.clientX, e.clientY));
+        window.addEventListener('touchmove', (e) => {
+            if(state.draggedComp || state.wiringMode) e.preventDefault();
+            handleMove(e.touches[0].clientX, e.touches[0].clientY);
+        }, {passive: false});
+
+        function endDrag(e) {
             if (state.draggedComp) {
-                document.getElementById(state.draggedComp.id).style.zIndex = '10';
+                const el = document.getElementById(state.draggedComp.id);
+                if(el) el.style.zIndex = '10';
                 state.draggedComp = null;
             }
-        };
 
-        function openPropModal(compId) {
-            const comp = state.components.find(c => c.id === compId);
-            if (!comp) return;
-            document.getElementById('editCompId').value = comp.id;
-            
-            const label = document.getElementById('modalLabel');
-            const input = document.getElementById('propValue');
-            const select = document.getElementById('propSelect');
-            
-            input.classList.remove('hidden');
-            select.classList.add('hidden');
-            
-            if (comp.type === 'resistor') {
-                label.innerText = 'Resistência (Ohms - Ω)';
-                input.value = comp.props.resistance;
-                input.step = "1";
-            } else if (comp.type === 'potentiometer') {
-                label.innerText = 'Resistência Máxima (Ohms - Ω)';
-                input.value = comp.props.maxResistance;
-                input.step = "100";
-            } else if (comp.type === 'battery') {
-                label.innerText = 'Tensão da Fonte (Volts - V)';
-                input.value = comp.props.voltage;
-                input.step = "0.1";
-            } else if (comp.type === 'capacitor') {
-                label.innerText = 'Capacitância (Microfarads - µF)';
-                input.value = comp.props.capacitance;
-                input.step = "1";
-            } else if (comp.type === 'motor') {
-                label.innerText = 'Resistência Interna (Ohms - Ω)';
-                input.value = comp.props.internalResistance;
-                input.step = "1";
-            } else if (comp.type === 'led') {
-                label.innerText = 'Cor do LED';
-                input.classList.add('hidden');
-                select.classList.remove('hidden');
-                select.value = comp.props.ledColor || 'red';
-            }
-            
-            document.getElementById('propModal').classList.remove('hidden');
-        }
-
-        function closeModal() {
-            document.getElementById('propModal').classList.add('hidden');
-        }
-
-        function saveProps() {
-            const id = document.getElementById('editCompId').value;
-            const comp = state.components.find(c => c.id === id);
-            
-            if (comp) {
-                if (comp.type === 'led') {
-                    const val = document.getElementById('propSelect').value;
-                    comp.props.ledColor = val;
-                    resetSimulationStates();
-                    renderCanvas();
-                    closeModal();
-                    return;
+            // Nova lógica: Se estivermos desenhando um fio e soltarmos o mouse/dedo
+            if (state.wiringMode && e) {
+                let clientX, clientY;
+                if (e.changedTouches) {
+                    clientX = e.changedTouches[0].clientX;
+                    clientY = e.changedTouches[0].clientY;
+                } else {
+                    clientX = e.clientX;
+                    clientY = e.clientY;
                 }
-
-                const val = parseFloat(document.getElementById('propValue').value);
-                if (val >= 0) {
-                    if (comp.type === 'resistor') {
-                        comp.props.resistance = val;
-                    } else if (comp.type === 'potentiometer') {
-                        comp.props.maxResistance = val;
-                    } else if (comp.type === 'battery') {
-                        comp.props.voltage = val;
-                    } else if (comp.type === 'capacitor') {
-                        comp.props.capacitance = val;
-                        if(comp.props.storedV > val) comp.props.storedV = 0;
-                    } else if (comp.type === 'motor') {
-                        comp.props.internalResistance = val;
+                
+                // Verifica o que está exatamente debaixo do ponteiro/dedo
+                const target = document.elementFromPoint(clientX, clientY);
+                if (target && target.classList.contains('pin')) {
+                    const targetPinId = target.id;
+                    if (targetPinId !== state.wiringMode) {
+                        completeWiring(targetPinId);
                     }
-                    resetSimulationStates();
-                    renderCanvas();
                 }
             }
-            closeModal();
         }
+        window.addEventListener('mouseup', endDrag);
+        window.addEventListener('touchend', endDrag);
 
-        function toggleSwitch(compId) {
-            const comp = state.components.find(c => c.id === compId);
-            if(comp) {
-                comp.props.closed = !comp.props.closed;
-                resetSimulationStates();
-                renderCanvas();
+        function completeWiring(targetPinId) {
+            const comp1 = state.wiringMode.substring(0, state.wiringMode.lastIndexOf('_'));
+            const comp2 = targetPinId.substring(0, targetPinId.lastIndexOf('_'));
+            
+            if (comp1 !== comp2) {
+                // Verifica se a conexão já existe (qualquer direção)
+                let exists = state.wires.find(w => 
+                    (w.from === state.wiringMode && w.to === targetPinId) ||
+                    (w.to === state.wiringMode && w.from === targetPinId)
+                );
+                
+                if(!exists) {
+                    state.wires.push({ id: 'w_' + Date.now(), from: state.wiringMode, to: targetPinId, voltage: 0, color: state.currentWireColor });
+                    resetSimulationStates();
+                }
             }
+            state.wiringMode = null;
+            renderWires();
         }
 
         function handlePinClick(pinId, event) {
             event.stopPropagation();
+            event.preventDefault(); // previne duplo disparo em touch
+            
             if (!state.wiringMode) {
                 state.wiringMode = pinId;
+                renderWires(); // Para desenhar o fio grudado no mouse
             } else {
                 if (state.wiringMode !== pinId) {
-                    const comp1 = state.wiringMode.substring(0, state.wiringMode.lastIndexOf('_'));
-                    const comp2 = pinId.substring(0, pinId.lastIndexOf('_'));
-                    
-                    if (comp1 !== comp2) {
-                        state.wires.push({ id: 'w_' + Date.now(), from: state.wiringMode, to: pinId });
-                        resetSimulationStates();
-                    }
+                    completeWiring(pinId);
+                } else {
+                    // Clicou no mesmo pino, cancela a ação
+                    state.wiringMode = null;
+                    renderWires();
                 }
-                state.wiringMode = null;
-                renderWires();
             }
         }
 
@@ -546,33 +682,79 @@
             state.wires.forEach(w => {
                 const p1 = getPinPos(w.from);
                 const p2 = getPinPos(w.to);
-                drawBezier(svg, p1, p2, w.id);
+                drawWire(svg, p1, p2, w);
             });
 
+            // Linha sendo desenhada
             if (state.wiringMode && state.mousePos) {
                 const p1 = getPinPos(state.wiringMode);
-                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                const d = `M ${p1.x} ${p1.y} C ${p1.x + (state.mousePos.x - p1.x)/2} ${p1.y}, ${p1.x + (state.mousePos.x - p1.x)/2} ${state.mousePos.y}, ${state.mousePos.x} ${state.mousePos.y}`;
-                path.setAttribute('d', d);
-                path.setAttribute('class', 'wire-line opacity-50');
-                path.setAttribute('fill', 'none');
-                svg.appendChild(path);
+                drawWire(svg, p1, state.mousePos, null, true);
             }
         }
 
-        function drawBezier(svg, p1, p2, id) {
+        function setWireColor(color, btnElem = null) {
+            state.currentWireColor = color;
+            
+            // Atualiza a borda branca (estado ativo) dos botões
+            document.querySelectorAll('.color-btn').forEach(btn => {
+                btn.classList.remove('border-white', 'scale-110');
+                btn.classList.add('border-transparent');
+                
+                // Se o botão não foi clicado diretamente (acionado pela seleção de um fio existente)
+                if (!btnElem && btn.getAttribute('onclick').includes(color)) {
+                    btn.classList.remove('border-transparent');
+                    btn.classList.add('border-white', 'scale-110');
+                }
+            });
+
+            if (btnElem) {
+                btnElem.classList.remove('border-transparent');
+                btnElem.classList.add('border-white', 'scale-110');
+            }
+
+            // Se um fio estiver selecionado na tela, muda a cor dele imediatamente
+            if (state.selectedType === 'wire' && state.selectedItem) {
+                const wire = state.wires.find(w => w.id === state.selectedItem);
+                if (wire) {
+                    wire.color = color;
+                    renderWires();
+                }
+            }
+        }
+
+        function drawWire(svg, p1, p2, wireObj, isGhost = false) {
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            const d = `M ${p1.x} ${p1.y} C ${p1.x + (p2.x - p1.x)/2} ${p1.y}, ${p1.x + (p2.x - p1.x)/2} ${p2.y}, ${p2.x} ${p2.y}`;
+            
+            // Desenha um caminho suave
+            const dx = Math.abs(p2.x - p1.x);
+            const cpOffset = dx * 0.4;
+            const d = `M ${p1.x} ${p1.y} C ${p1.x + cpOffset} ${p1.y}, ${p2.x - cpOffset} ${p2.y}, ${p2.x} ${p2.y}`;
             path.setAttribute('d', d);
             
-            let selectedClass = (state.selectedItem === id) ? 'selected-wire' : '';
-            path.setAttribute('class', `wire-line ${selectedClass}`);
-            path.setAttribute('fill', 'none');
+            if(isGhost) {
+                path.setAttribute('class', 'wire-line opacity-50');
+                path.style.pointerEvents = 'none'; // <-- Adicionado para não bloquear o clique no pino
+                path.setAttribute('stroke', state.currentWireColor);
+            } else {
+                let selectedClass = (state.selectedItem === wireObj.id) ? 'selected-wire' : '';
+                path.setAttribute('class', `wire-line ${selectedClass}`);
+                
+                let color = wireObj.color || '#94a3b8'; // Usa a cor própria ou a cinza padrão
+                
+                // Colorir baseado na tensão APENAS se a cor for a cinza padrão
+                if (state.isPlaying && wireObj.voltage !== undefined && color === '#94a3b8') {
+                    if (wireObj.voltage > 2.0) color = '#ef4444'; // Vermelho (High)
+                    else if (wireObj.voltage < 0.5) color = '#1e293b'; // Preto (GND)
+                    else color = '#22c55e'; // Verde (Low/Intermediário)
+                }
+                
+                if (state.selectedItem !== wireObj.id) path.setAttribute('stroke', color);
+                
+                path.id = wireObj.id;
+                path.onclick = (e) => { e.stopPropagation(); selectItem(wireObj.id, 'wire'); };
+            }
             
-            path.onclick = (e) => {
-                e.stopPropagation();
-                selectItem(id, 'wire');
-            };
+            path.setAttribute('fill', 'none');
             svg.appendChild(path);
         }
 
@@ -582,42 +764,60 @@
             const btn = document.getElementById('playBtn');
             if (state.isPlaying) {
                 clearSelection();
-                btn.innerHTML = '<i class="fas fa-pause mr-2"></i>Pausar Simulação';
-                btn.className = 'px-5 py-2.5 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg shadow-md font-semibold transition-all flex items-center';
+                btn.innerHTML = '<i class="fas fa-stop mr-2"></i><span>Parar</span>';
+                btn.className = 'px-4 sm:px-5 py-2 sm:py-2.5 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg shadow-md font-semibold transition-all flex items-center text-sm sm:text-base';
             } else {
-                btn.innerHTML = '<i class="fas fa-play mr-2"></i>Iniciar Simulação';
-                btn.className = 'px-5 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg shadow-md font-semibold transition-all flex items-center';
+                btn.innerHTML = '<i class="fas fa-play mr-2"></i><span>Iniciar</span>';
+                btn.className = 'px-4 sm:px-5 py-2 sm:py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg shadow-md font-semibold transition-all flex items-center text-sm sm:text-base';
                 resetVisuals();
             }
         }
 
+        function resetSimulationStates() {
+            state.shortCircuitAlerted = false;
+            state.components.forEach(c => {
+                if(c.props.burnt !== undefined) c.props.burnt = false;
+                if(c.type === 'led') c.props.toleranceAlerted = false; // Reseta o alerta do LED
+            });
+        }
+
         function resetVisuals() {
             resetSimulationStates();
+            stopAllAudio();
+            
             state.components.forEach(c => {
-                if(c.type === 'capacitor') c.props.storedV = 0;
+                if(c.type === 'capacitor') {
+                    c.props.storedV = 0;
+                    const disp = document.getElementById(`cap_disp_${c.id}`);
+                    if(disp) disp.innerText = '0.0V';
+                }
+                
                 if (c.type === 'multimeter') {
                     const disp = document.getElementById(`disp_${c.id}`);
                     if(disp) disp.innerText = '0.00V';
                 }
-                if (c.type === 'led') {
-                    const icon = document.getElementById(`icon_${c.id}`);
-                    if(icon) {
+                
+                const icon = document.getElementById(`icon_${c.id}`);
+                const fire = document.getElementById(`fire_${c.id}`);
+                if (icon) {
+                    if (c.type === 'led') {
                         const colorInfo = ledColors[c.props.ledColor || 'red'];
                         icon.style.color = colorInfo.unlit;
                         icon.classList.remove('glow-red', 'glow-green', 'glow-blue', 'glow-yellow', 'glow-white');
-                    }
-                }
-                if (c.type === 'motor') {
-                    const icon = document.getElementById(`icon_${c.id}`);
-                    if(icon) {
+                    } else if (c.type === 'motor') {
                         icon.classList.remove('motor-spinning', 'motor-spinning-slow');
+                    } else if (c.type === 'buzzer') {
+                        icon.classList.remove('buzzer-ringing');
                     }
                 }
-                const fire = document.getElementById(`fire_${c.id}`);
                 if(fire) fire.classList.add('hidden');
             });
+            
+            state.wires.forEach(w => w.voltage = undefined);
+            renderWires();
         }
 
+        // Análise Nodal (Solucionador iterativo básico)
         function solvePhysics() {
             if (!state.isPlaying) return;
 
@@ -629,16 +829,17 @@
             }
             function union(i, j) { parent[find(i)] = find(j); }
 
+            // 1. Conectar nós físicos através de fios e interruptores
             state.wires.forEach(w => union(w.from, w.to));
-            
             state.components.forEach(c => {
                 if (c.type === 'switch' && c.props.closed) {
                     union(`${c.id}_pin1`, `${c.id}_pin2`);
                 }
             });
 
+            // 2. Detectar Fontes de Tensão
             let isShortCircuit = false;
-            let fixedVoltages = {}; 
+            let fixedVoltages = {};
             
             const batteries = state.components.filter(c => c.type === 'battery');
             batteries.forEach(b => {
@@ -650,8 +851,10 @@
                     document.getElementById(`fire_${b.id}`).classList.remove('hidden');
                 } else {
                     document.getElementById(`fire_${b.id}`).classList.add('hidden');
-                    fixedVoltages[nodeMinus] = 0;
-                    fixedVoltages[nodePlus] = b.props.voltage;
+                    if (b.props.isOn !== false) {
+                        fixedVoltages[nodeMinus] = 0; // GND local
+                        fixedVoltages[nodePlus] = b.props.voltage;
+                    }
                 }
             });
 
@@ -659,25 +862,20 @@
                 if (!state.shortCircuitAlerted) {
                     state.shortCircuitAlerted = true;
                     playBurnSound();
-                    showToast("Fonte em Curto-Circuito! Resistência nula detectada.", "error");
+                    showToast("Curto-Circuito! Um fio sem resistência conectou os pólos da bateria.", "error");
                 }
-                state.components.filter(c => c.type !== 'battery').forEach(c => {
-                    const fire = document.getElementById(`fire_${c.id}`);
-                    const icon = document.getElementById(`icon_${c.id}`);
-                    if(fire) fire.classList.add('hidden');
-                    if(c.type === 'led' && icon) icon.classList.remove('glow-red', 'glow-green', 'glow-blue', 'glow-yellow', 'glow-white');
-                    if(c.type === 'motor' && icon) icon.classList.remove('motor-spinning', 'motor-spinning-slow');
-                });
-                return;
+                stopAllAudio();
+                return; // Para a simulação
             }
 
+            // 3. Montar grafo de resistências
             let nodes = new Set();
             let edges = [];
             
             state.components.forEach(c => {
                 let n1 = find(`${c.id}_pin1`);
                 let n2 = find(`${c.id}_pin2`);
-                if (n1 === n2) return; 
+                if (n1 === n2) return;
                 
                 nodes.add(n1); nodes.add(n2);
 
@@ -686,16 +884,31 @@
                 } else if (c.type === 'potentiometer') {
                     let potR = Math.max(1, (c.props.sliderPos / 100) * c.props.maxResistance);
                     edges.push({ n1, n2, R: potR, compId: c.id });
+                } else if (c.type === 'photoresistor') {
+                    // Luz 100% -> ~200 ohm, Luz 0% -> ~50k ohm
+                    let luxR = 50000 - (c.props.lightLevel / 100) * 49800; 
+                    edges.push({ n1, n2, R: Math.max(200, luxR), compId: c.id });
                 } else if (c.type === 'capacitor') {
                     if(c.props.storedV === undefined) c.props.storedV = 0;
+                    // Modelo simples: resistência parasita + fonte de tensão (estado anterior)
                     edges.push({ n1, n2, R: 10, isCapacitor: true, compId: c.id, storedV: c.props.storedV });
                 } else if (c.type === 'led') {
-                    edges.push({ n1, n2, isLed: true, compId: c.id, burnt: c.props.burnt }); 
+                    edges.push({ n1, n2, isLed: true, compId: c.id, burnt: c.props.burnt });
                 } else if (c.type === 'motor') {
                     edges.push({ n1, n2, R: Math.max(5, c.props.internalResistance), isMotor: true, compId: c.id });
+                } else if (c.type === 'buzzer') {
+                    edges.push({ n1, n2, R: 100, isBuzzer: true, compId: c.id });
                 }
             });
 
+            // HACK FÍSICO: Se a fonte for desligada, o circuito fica "flutuando".
+            // Para o capacitor conseguir descarregar e a matemática não bugar, ancoramos o circuito ao GND (0V).
+            if (Object.keys(fixedVoltages).length === 0 && nodes.size > 0) {
+                let firstNode = nodes.values().next().value;
+                fixedVoltages[firstNode] = 0;
+            }
+
+            // 4. Relaxamento Interativo de Nós (Calcula Tensões)
             let V = {};
             nodes.forEach(n => V[n] = 0);
             Object.keys(fixedVoltages).forEach(n => V[n] = fixedVoltages[n]);
@@ -704,8 +917,8 @@
                 nodes.forEach(n => {
                     if (fixedVoltages[n] !== undefined) return;
                     
-                    let sumVR = 0; 
-                    let sum1R = 0; 
+                    let sumVR = 0;
+                    let sum1R = 0;
                     
                     edges.forEach(e => {
                         if (e.n1 === n || e.n2 === n) {
@@ -713,16 +926,15 @@
                             let R = e.R;
                             
                             if (e.isLed) {
-                                if (e.burnt) {
-                                    R = 1e9;
-                                } else {
-                                    let vAnode = V[find(`${e.compId}_pin1`)]; 
-                                    let vCathode = V[find(`${e.compId}_pin2`)]; 
-                                    R = (vAnode > vCathode) ? 100 : 100000; 
+                                if (e.burnt) R = 1e9; // Aberto se queimado
+                                else {
+                                    let vAnode = V[find(`${e.compId}_pin1`)];
+                                    let vCathode = V[find(`${e.compId}_pin2`)];
+                                    // R fixado em 100 ohms para emular queda de tensão de exatos ~2.0V a 20mA
+                                    R = (vAnode > vCathode) ? 100 : 100000;
                                 }
                             } else if (e.isCapacitor) {
                                 let capPin1 = find(`${e.compId}_pin1`);
-                                let capPin2 = find(`${e.compId}_pin2`);
                                 let vCapDiff = (n === capPin1) ? e.storedV : -e.storedV;
                                 sumVR += (V[neighbor] + vCapDiff) / R;
                                 sum1R += 1 / R;
@@ -736,44 +948,80 @@
                     
                     if (sum1R > 0) {
                         let targetV = sumVR / sum1R;
-                        V[n] = V[n] * 0.5 + targetV * 0.5; 
+                        V[n] = V[n] * 0.5 + targetV * 0.5; // Fator de convergência
                     }
                 });
             }
 
+            // 5. Atualizar estado dos componentes com base nos resultados
+            updateSimulationVisuals(V, find);
+        }
+
+        function updateSimulationVisuals(V, findNode) {
+            // Busca a maior fonte de tensão para o cálculo da Lei de Ohm
+            let v_fonte = 0;
+            state.components.forEach(c => {
+                if (c.type === 'battery' && c.props.voltage > v_fonte) {
+                    v_fonte = c.props.voltage;
+                }
+            });
+            if (v_fonte === 0) v_fonte = 5; // Padrão se não encontrar
+            let R_ideal = Math.max(0, (v_fonte - 2.0) / 0.02);
+
+            // Atualizar Física dos Capacitores (Carga e Descarga realistas)
             state.components.filter(c => c.type === 'capacitor').forEach(c => {
-                let v1 = V[find(`${c.id}_pin1`)] || 0;
-                let v2 = V[find(`${c.id}_pin2`)] || 0;
-                let circuitV = Math.abs(v1 - v2);
+                let v1 = V[findNode(`${c.id}_pin1`)] || 0;
+                let v2 = V[findNode(`${c.id}_pin2`)] || 0;
                 if(c.props.storedV === undefined) c.props.storedV = 0;
                 
-                let diff = circuitV - c.props.storedV;
-                let rate = Math.max(0.01, 1 / (c.props.capacitance * 0.1));
-                c.props.storedV += diff * rate;
+                // Calcula a corrente fluindo pelo capacitor: I = (V1 - V2 - V_Capacitor) / Resistencia_Interna
+                let I = (v1 - v2 - c.props.storedV) / 10;
+                
+                // Ajustamos a escala (C_sim) para que o descarregamento demore alguns segundos (fator educacional)
+                let C_sim = Math.max(0.001, c.props.capacitance * 0.001); 
+                let dt = 0.05; // 50ms por ciclo
+                
+                // Aplica a fórmula real de capacitores: dV = (I * dt) / C
+                let dV = (I * dt) / C_sim;
+                c.props.storedV += dV;
+                c.props.storedV = Math.max(-50, Math.min(50, c.props.storedV)); // Limite de segurança
+
+                // Atualiza o display no componente
+                const capDisp = document.getElementById(`cap_disp_${c.id}`);
+                if (capDisp) capDisp.innerText = Math.abs(c.props.storedV).toFixed(1) + 'V';
             });
 
+            // Atualizar UI dos Componentes
             state.components.forEach(c => {
-                let v1 = V[find(`${c.id}_pin1`)] || 0;
-                let v2 = V[find(`${c.id}_pin2`)] || 0;
+                let v1 = V[findNode(`${c.id}_pin1`)] || 0;
+                let v2 = V[findNode(`${c.id}_pin2`)] || 0;
+                let diff = v1 - v2;
                 
                 if (c.type === 'multimeter') {
-                    let diff = v1 - v2;
                     document.getElementById(`disp_${c.id}`).innerText = diff.toFixed(2) + 'V';
                 }
                 
                 if (c.type === 'motor') {
                     let icon = document.getElementById(`icon_${c.id}`);
-                    let diff = Math.abs(v1 - v2);
                     if (icon) {
-                        if (diff >= 3.5) {
-                            icon.classList.remove('motor-spinning-slow');
-                            icon.classList.add('motor-spinning');
-                        } else if (diff >= 1.0) {
-                            icon.classList.remove('motor-spinning');
-                            icon.classList.add('motor-spinning-slow');
+                        if (Math.abs(diff) >= 3.5) {
+                            icon.className = `fas fa-fan comp-icon motor-spinning`;
+                        } else if (Math.abs(diff) >= 1.0) {
+                            icon.className = `fas fa-fan comp-icon motor-spinning-slow`;
                         } else {
-                            icon.classList.remove('motor-spinning', 'motor-spinning-slow');
+                            icon.className = `fas fa-fan comp-icon`;
                         }
+                    }
+                }
+
+                if (c.type === 'buzzer') {
+                    let icon = document.getElementById(`icon_${c.id}`);
+                    if (Math.abs(diff) >= 2.5) {
+                        if(icon) icon.classList.add('buzzer-ringing', 'text-blue-500');
+                        updateBuzzerAudio(c.id, true, c.props.frequency);
+                    } else {
+                        if(icon) icon.classList.remove('buzzer-ringing', 'text-blue-500');
+                        updateBuzzerAudio(c.id, false);
                     }
                 }
 
@@ -783,42 +1031,162 @@
                     const colorInfo = ledColors[c.props.ledColor || 'red'];
                     
                     if (c.props.burnt) {
-                        el.style.color = '#1f2937';
-                        el.classList.remove('glow-red', 'glow-green', 'glow-blue', 'glow-yellow', 'glow-white');
-                        fire.classList.remove('hidden');
+                        if(el) { el.style.color = '#1f2937'; el.classList.remove('glow-red', 'glow-green', 'glow-blue', 'glow-yellow', 'glow-white'); }
+                        if(fire) fire.classList.remove('hidden');
                         return;
                     }
 
-                    let diff = v1 - v2;
+                    // Apenas acende se polarizado corretamente (diff positivo)
                     let current = diff > 0 ? diff / 100 : 0; 
                     
-                    if (current > 0.04) { 
+                    if (current > 0.04) { // 40mA max - Queimou
                         c.props.burnt = true;
                         playBurnSound();
-                        showToast(`O LED Queimou! A corrente de ${(current*1000).toFixed(0)}mA excedeu o limite máximo (40mA).`, "error");
-                        
-                        el.style.color = '#1f2937'; 
-                        el.classList.remove('glow-red', 'glow-green', 'glow-blue', 'glow-yellow', 'glow-white');
-                        fire.classList.remove('hidden');
-                    } else if (current >= 0.005) { 
-                        el.style.color = colorInfo.hex; 
-                        el.classList.remove('glow-red', 'glow-green', 'glow-blue', 'glow-yellow', 'glow-white');
-                        el.classList.add(colorInfo.litClass);
-                        fire.classList.add('hidden');
-                    } else { 
-                        el.style.color = colorInfo.unlit; 
-                        el.classList.remove('glow-red', 'glow-green', 'glow-blue', 'glow-yellow', 'glow-white');
-                        fire.classList.add('hidden');
+                        showToast(`O LED Queimou! Corrente excedeu 40mA.<br><span class="text-xs mt-1 block">Use R = (${v_fonte}V - 2V) / 0.02A = <b>${Math.round(R_ideal)}Ω</b></span>`, "error", 6000);
+                        if(el) { el.style.color = '#1f2937'; el.className = `fas fa-lightbulb comp-icon`; }
+                        if(fire) fire.classList.remove('hidden');
+                    } else if (current > 0.001) { 
+                        // Verifica tolerância (Ideal = 20mA | Mín -10% = 18mA | Máx +10% = 22mA)
+                        let isOutsideTolerance = false;
+                        let statusMsg = "";
+
+                        if (current > 0.022) {
+                            isOutsideTolerance = true;
+                            statusMsg = "ALTA";
+                        } else if (current < 0.018) {
+                            isOutsideTolerance = true;
+                            statusMsg = "BAIXA";
+                        }
+
+                        if (isOutsideTolerance) {
+                            if (!c.props.toleranceAlerted) {
+                                c.props.toleranceAlerted = true;
+                                showToast(`💡 Tolerância (±10%): Corrente <b>${statusMsg}</b>.<br><span class="text-xs mt-1 block text-yellow-100">Lei de Ohm: R = (V_fonte - V_led) / I_led<br>Ideal: R = (${v_fonte}V - 2.0V) / 0.02A = <b class="text-white">${Math.round(R_ideal)}Ω</b></span>`, "warn", 7000);
+                            }
+                        }
+
+                        // Brilho visual
+                        if (current >= 0.018 && current <= 0.022) {
+                            if(el) { el.style.color = colorInfo.hex; el.className = `fas fa-lightbulb comp-icon ${colorInfo.litClass}`; }
+                            if(fire) fire.classList.add('hidden');
+                        } else if (current >= 0.005) {
+                            if(el) { el.style.color = colorInfo.hex; el.className = `fas fa-lightbulb comp-icon opacity-75`; }
+                            if(fire) fire.classList.add('hidden');
+                        } else {
+                            if(el) { el.style.color = colorInfo.hex; el.className = `fas fa-lightbulb comp-icon opacity-40`; }
+                            if(fire) fire.classList.add('hidden');
+                        }
+                    } else { // Desligado
+                        if(el) { el.style.color = colorInfo.unlit; el.className = `fas fa-lightbulb comp-icon`; }
+                        if(fire) fire.classList.add('hidden');
                     }
                 }
             });
+
+            // Atualizar Cores dos Fios
+            let wireColorChanged = false;
+            state.wires.forEach(w => {
+                let v = V[findNode(w.from)] || 0;
+                if (Math.abs((w.voltage||0) - v) > 0.5) {
+                    w.voltage = v;
+                    wireColorChanged = true;
+                }
+            });
+            
+            // Só redesenha se as categorias de tensão mudarem muito para otimizar
+            if(wireColorChanged) renderWires();
         }
 
-        setInterval(solvePhysics, 100);
+        setInterval(solvePhysics, 50); // 20 FPS Physics Loop
 
-        window.onload = () => {
-            initLibrary();
-        };
+        function openPropModal(compId) {
+            const comp = state.components.find(c => c.id === compId);
+            if (!comp) return;
+            document.getElementById('editCompId').value = comp.id;
+            
+            const label = document.getElementById('modalLabel');
+            const input = document.getElementById('propValue');
+            const select = document.getElementById('propSelect');
+            
+            input.classList.remove('hidden');
+            select.classList.add('hidden');
+            
+            if (comp.type === 'resistor') {
+                label.innerText = 'Resistência (Ohms - Ω)';
+                input.value = comp.props.resistance; input.step = "1"; input.type = 'number';
+            } else if (comp.type === 'potentiometer') {
+                label.innerText = 'Resistência Máxima (Ohms - Ω)';
+                input.value = comp.props.maxResistance; input.step = "100"; input.type = 'number';
+            } else if (comp.type === 'battery') {
+                label.innerText = 'Tensão (Volts - V)';
+                input.value = comp.props.voltage; input.step = "0.5"; input.type = 'number';
+            } else if (comp.type === 'capacitor') {
+                label.innerText = 'Capacitância (Microfarads - µF)';
+                input.value = comp.props.capacitance; input.step = "1"; input.type = 'number';
+            } else if (comp.type === 'motor') {
+                label.innerText = 'Resistência Interna (Ohms - Ω)';
+                input.value = comp.props.internalResistance; input.step = "1"; input.type = 'number';
+            } else if (comp.type === 'buzzer') {
+                label.innerText = 'Frequência do Som (Hz)';
+                input.value = comp.props.frequency || 440; input.step = "10"; input.type = 'number';
+            } else if (comp.type === 'led') {
+                label.innerText = 'Cor do LED';
+                input.classList.add('hidden');
+                select.classList.remove('hidden');
+                select.value = comp.props.ledColor || 'red';
+            }
+            
+            document.getElementById('propModal').classList.remove('hidden');
+        }
+
+        function closeModal() { document.getElementById('propModal').classList.add('hidden'); }
+        function openHelpModal() { document.getElementById('helpModal').classList.remove('hidden'); }
+        function closeHelpModal() { document.getElementById('helpModal').classList.add('hidden'); }
+
+        function saveProps() {
+            const id = document.getElementById('editCompId').value;
+            const comp = state.components.find(c => c.id === id);
+            
+            if (comp) {
+                if (comp.type === 'led') {
+                    comp.props.ledColor = document.getElementById('propSelect').value;
+                } else {
+                    const val = parseFloat(document.getElementById('propValue').value);
+                    if (val >= 0) {
+                        if (comp.type === 'resistor') comp.props.resistance = val;
+                        else if (comp.type === 'potentiometer') comp.props.maxResistance = val;
+                        else if (comp.type === 'battery') comp.props.voltage = val;
+                        else if (comp.type === 'buzzer') comp.props.frequency = val;
+                        else if (comp.type === 'capacitor') {
+                            comp.props.capacitance = val;
+                            if(comp.props.storedV > val) comp.props.storedV = 0;
+                        }
+                        else if (comp.type === 'motor') comp.props.internalResistance = val;
+                    }
+                }
+                resetSimulationStates();
+                renderCanvas();
+            }
+            closeModal();
+        }
+
+        function toggleSwitch(compId) {
+            const comp = state.components.find(c => c.id === compId);
+            if(comp) {
+                comp.props.closed = !comp.props.closed;
+                resetSimulationStates();
+                renderCanvas();
+            }
+        }
+
+        function togglePower(compId) {
+            const comp = state.components.find(c => c.id === compId);
+            if(comp) {
+                comp.props.isOn = (comp.props.isOn === false) ? true : false;
+                resetSimulationStates();
+                renderCanvas();
+            }
+        }
 
         function selectItem(id, type) {
             state.selectedItem = id;
@@ -828,8 +1196,15 @@
             delBtn.classList.remove('hidden');
             delBtn.classList.add('flex');
             
-            if (type === 'component') renderCanvas();
-            else renderWires();
+            if (type === 'wire') {
+                const wire = state.wires.find(w => w.id === id);
+                if (wire && wire.color) {
+                    setWireColor(wire.color); // Atualiza os botões lá no topo pra refletir a cor deste fio
+                }
+                renderWires();
+            } else {
+                renderCanvas();
+            }
         }
 
         function clearSelection() {
@@ -842,8 +1217,7 @@
                     delBtn.classList.add('hidden');
                     delBtn.classList.remove('flex');
                 }
-                
-                renderCanvas(); 
+                renderCanvas();
             }
         }
 
@@ -851,11 +1225,14 @@
             if (!state.selectedItem) return;
 
             if (state.isPlaying) {
-                showToast("Por favor, pause a simulação antes de remover componentes (Desenergize o circuito).", "warn");
+                showToast("Pare a simulação antes de remover componentes (Desenergize o circuito).", "warn");
                 return;
             }
 
             if (state.selectedType === 'component') {
+                if (state.components.find(c=>c.id===state.selectedItem)?.type === 'buzzer') {
+                    updateBuzzerAudio(state.selectedItem, false); // Garante que cala a boca
+                }
                 state.components = state.components.filter(c => c.id !== state.selectedItem);
                 state.wires = state.wires.filter(w => !w.from.startsWith(state.selectedItem + '_') && !w.to.startsWith(state.selectedItem + '_'));
             } else if (state.selectedType === 'wire') {
@@ -874,6 +1251,11 @@
             }
         });
 
+        // Inicialização
+        window.onload = () => {
+            initLibrary();
+            setTimeout(openHelpModal, 500); // Mostra tutorial no início
+        };
     </script>
 </body>
 </html>
